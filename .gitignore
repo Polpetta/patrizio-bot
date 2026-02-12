@@ -1,0 +1,49 @@
+# Go build artifacts
+/patrizio
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+*.prof
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# IDE configuration
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+
+# Build output
+/bin/
+/dist/
+
+# sqlc generated code (regenerated via make sqlc)
+# Uncomment if you prefer not to track generated code:
+# internal/database/queries/

@@ -1,0 +1,47 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # Golangci-lint for Go code (using local installation)
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        name: Golangci lint
+        entry: golangci-lint run --fix
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Go build check
+  - repo: local
+    hooks:
+      - id: go-build
+        name: Go build
+        entry: go build
+        args: ['./...']
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Go build check
+  - repo: local
+    hooks:
+      - id: docker-build
+        name: Docker build
+        entry: make docker-build
+        language: system
+        types: [go] # FIXME maybe add SQL as well?
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Run all tests on pre-push (updated to use new stage name)
+  - repo: local
+    hooks:
+      - id: run-tests
+        name: Run tests
+        entry: make test
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

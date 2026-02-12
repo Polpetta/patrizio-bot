@@ -1,0 +1,175 @@
+# Golangci-lint configuration
+# Documentation: https://golangci-lint.run/usage/configuration/
+
+version: 2
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+  # Exit code when at least one issue was found
+  issues-exit-code: 1
+
+  # Include test files
+  tests: true
+
+  # Modules download mode
+  modules-download-mode: readonly
+
+# Output configuration
+output:
+  format: colored-line-number
+
+  # Print lines of code with issue
+  print-issued-lines: true
+
+  # Print linter name in the end of issue text
+  print-linter-name: true
+
+linters:
+  # Disable all linters by default
+  disable-all: true
+
+  # Enable specific linters (compatible with golangci-lint v2.6.0)
+  enable:
+    # Core linters (enabled by default, explicitly listed)
+    - govet          # Reports suspicious constructs
+    - staticcheck    # Advanced static analysis (auto-fix)
+    - errcheck       # Checks for unchecked errors (STRICT MODE)
+    - ineffassign    # Detect ineffectual assignments
+    - unused         # Checks for unused constants, variables, functions and types
+
+    # Error handling
+    - errorlint      # Find code that will cause problems with Go 1.13+ error wrapping (auto-fix)
+
+    # Performance linters (as requested)
+    - prealloc       # Find slice declarations that could potentially be preallocated
+
+    # Security
+    - gosec          # Inspects source code for security problems
+
+    # Style and best practices
+    - misspell       # Finds commonly misspelled English words (auto-fix)
+    - unconvert      # Remove unnecessary type conversions (auto-fix)
+    - unparam        # Reports unused function parameters
+    - nakedret       # Finds naked returns in functions greater than a specified length (auto-fix)
+    - gocyclo        # Computes cyclomatic complexity
+    - gocognit       # Computes cognitive complexity
+    # Note: funlen disabled due to config not being respected in golangci-lint v2.6.0
+    # - funlen         # Tool for detection of long functions
+    - whitespace     # Detection of leading and trailing whitespace (auto-fix)
+    - revive         # Fast, configurable, extensible, flexible, and beautiful linter for Go (auto-fix)
+
+linters-settings:
+  # Error check settings (STRICT MODE)
+  errcheck:
+    # Report about not checking of errors in type assertions: `a := b.(MyStruct)`
+    check-type-assertions: true
+
+    # Report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`
+    check-blank: true
+
+    # List of functions to exclude from checking (empty = strict, check everything)
+    exclude-functions: []
+
+  # Cyclomatic complexity limits (CONSERVATIVE - high limits to catch very problematic code)
+  gocyclo:
+    # Minimal cyclomatic complexity to report
+    min-complexity: 20
+
+  # Cognitive complexity limits (CONSERVATIVE)
+  gocognit:
+    # Minimal cognitive complexity to report
+    min-complexity: 30
+
+  # Function length limits (CONSERVATIVE - high limits to catch very problematic code)
+  funlen:
+    # Maximum number of lines in a function
+    lines: 200
+    # Maximum number of statements in a function
+    statements: 120
+
+  # Naked returns check
+  nakedret:
+    # Maximum number of lines in a function to allow naked return
+    max-func-lines: 30
+
+  # Security checks
+  gosec:
+    # Select which security checks to run
+    excludes: []
+
+  # Gofmt settings
+  gofmt:
+    # Simplify code
+    simplify: true
+
+  # Goimports settings
+  goimports:
+    # Put imports beginning with prefix after 3rd-party packages
+    local-prefixes: github.com/polpetta/patrizio
+
+  # Revive settings (replacement for deprecated golint)
+  revive:
+    # Enable all rules by default
+    enable-all-rules: false
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+issues:
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
+  # Exclude some default excludes
+  exclude-use-default: false
+
+  # Exclude specific issues
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - gosec
+        - funlen
+
+    # Exclude generated files
+    - path: pb_migrations/
+      linters:
+        - all
+
+    # Allow TODO and FIXME comments in code (common in development)
+    - linters:
+        - revive
+      text: "(TODO|FIXME)"
+
+  # Show all issues from a linter
+  new: false
+
+  # Fix found issues (if supported by the linter)
+  fix: true
