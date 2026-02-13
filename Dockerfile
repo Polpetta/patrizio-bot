@@ -11,6 +11,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizio
 
+RUN mkdir -p data/db data/media
+
 # Download deltachat-rpc-server from GitHub releases
 FROM alpine:3 AS rpc-server
 
@@ -25,10 +27,12 @@ RUN ARCH=$(case ${TARGETARCH} in amd64) echo "x86_64" ;; arm64) echo "aarch64" ;
 # Runtime stage
 FROM gcr.io/distroless/static-debian12
 
-COPY --from=builder /app/patrizio /patrizio
+COPY --from=builder /app/patrizio /usr/local/bin/patrizio
+COPY --from=builder --chown=nonroot:nonroot /app/data /data
 COPY --from=rpc-server /deltachat-rpc-server /usr/local/bin/deltachat-rpc-server
 
 USER nonroot:nonroot
+VOLUME ["/data"]
 
-ENTRYPOINT ["/patrizio"]
+ENTRYPOINT ["/usr/local/bin/patrizio"]
 CMD ["serve"]

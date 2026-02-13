@@ -8,6 +8,35 @@ import (
 	"time"
 )
 
+type Filter struct {
+	ID           int64
+	ChatID       int64
+	ResponseType string
+	CreatedAt    time.Time
+}
+
+type FilterMediaResp struct {
+	FilterID  int64
+	MediaHash string
+	MediaType string
+}
+
+type FilterReactionResp struct {
+	FilterID int64
+	Reaction string
+}
+
+type FilterTextResp struct {
+	FilterID     int64
+	ResponseText string
+}
+
+type FilterTrigger struct {
+	ID          int64
+	FilterID    int64
+	TriggerText string
+}
+
 type SchemaVersion struct {
 	ID        int64
 	AppliedAt time.Time

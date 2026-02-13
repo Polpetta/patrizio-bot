@@ -24,6 +24,12 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to set WAL mode: %w", err)
 	}
 
+	// Enable foreign key enforcement.
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
 	return db, nil
 }
 

@@ -22,7 +22,7 @@ lint:
 
 # Build Docker image
 docker-build:
-	docker build -t $(DOCKER_IMAGE) .
+	docker buildx build -t $(DOCKER_IMAGE) --progress=plain .
 
 # Run pending database migrations
 migrate:
