@@ -15,14 +15,14 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	if cfg.DBPath() != "./patrizio.db" {
-		t.Errorf("DBPath() = %q, want %q", cfg.DBPath(), "./patrizio.db")
+	if cfg.DBPath() != "/data/db/patrizio.db" {
+		t.Errorf("DBPath() = %q, want %q", cfg.DBPath(), "/data/db/patrizio.db")
 	}
 	if cfg.LogLevel() != "info" {
 		t.Errorf("LogLevel() = %q, want %q", cfg.LogLevel(), "info")
 	}
-	if cfg.MediaPath() != "./media" {
-		t.Errorf("MediaPath() = %q, want %q", cfg.MediaPath(), "./media")
+	if cfg.MediaPath() != "/data/media" {
+		t.Errorf("MediaPath() = %q, want %q", cfg.MediaPath(), "/data/media")
 	}
 }
 
