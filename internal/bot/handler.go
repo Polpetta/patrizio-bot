@@ -162,9 +162,255 @@ func handleGroupMessage(
 	}
 }
 
+// sendErrorMessage sends an error message to the chat and logs if sending fails.
+func sendErrorMessage(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	message string,
+) {
+	if _, err := bot.Rpc.MiscSendTextMessage(accID, chatID, message); err != nil {
+		logger.Errorf("Failed to send error message to chat %d: %v", chatID, err)
+	}
+}
+
+// sendConfirmation sends a confirmation message to the chat and logs if sending fails.
+func sendConfirmation(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	message string,
+) {
+	if _, err := bot.Rpc.MiscSendTextMessage(accID, chatID, message); err != nil {
+		logger.Errorf("Failed to send confirmation to chat %d: %v", chatID, err)
+	}
+}
+
+// validateAndNormalizeTriggers validates all triggers and returns normalized versions.
+func validateAndNormalizeTriggers(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	triggers []string,
+) ([]string, bool) {
+	// Validate all triggers
+	for _, trigger := range triggers {
+		if err := domain.ValidateTrigger(trigger); err != nil {
+			errMsg := fmt.Sprintf("❌ Invalid trigger '%s': %v", trigger, err)
+			sendErrorMessage(bot, logger, accID, chatID, errMsg)
+			return nil, false
+		}
+	}
+
+	// Normalize triggers for storage
+	normalized := make([]string, len(triggers))
+	for i, trigger := range triggers {
+		normalized[i] = domain.NormalizeTrigger(trigger)
+	}
+
+	return normalized, true
+}
+
+// handleTextFilterCreation creates a text filter and sends confirmation.
+func handleTextFilterCreation(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	dbChatID int64,
+	cmd *domain.FilterCommand,
+	normalizedTriggers []string,
+	isMediaFilter bool,
+	deps *domain.Dependencies,
+) {
+	ctx := context.Background()
+
+	// If replying to a media message but response is text, that's probably an error
+	if isMediaFilter {
+		errMsg := "❌ You're replying to a media message. Did you mean to create a media filter? Remove the reply or use the command without text if you want to create a media filter."
+		sendErrorMessage(bot, logger, accID, chatID, errMsg)
+		return
+	}
+
+	err := deps.FilterRepository.CreateTextFilter(ctx, dbChatID, normalizedTriggers, cmd.ResponseText)
+	if err != nil {
+		errMsg := fmt.Sprintf("❌ Failed to create filter: %v", err)
+		sendErrorMessage(bot, logger, accID, chatID, errMsg)
+		return
+	}
+
+	// Send confirmation
+	triggerList := strings.Join(cmd.Triggers, ", ")
+	confirmMsg := fmt.Sprintf("✅ Filter created! Triggers: %s", triggerList)
+	sendConfirmation(bot, logger, accID, chatID, confirmMsg)
+}
+
+// handleReactionFilterCreation creates a reaction filter and sends confirmation.
+func handleReactionFilterCreation(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	dbChatID int64,
+	cmd *domain.FilterCommand,
+	normalizedTriggers []string,
+	deps *domain.Dependencies,
+) {
+	ctx := context.Background()
+
+	err := deps.FilterRepository.CreateReactionFilter(ctx, dbChatID, normalizedTriggers, cmd.Reaction)
+	if err != nil {
+		errMsg := fmt.Sprintf("❌ Failed to create reaction filter: %v", err)
+		sendErrorMessage(bot, logger, accID, chatID, errMsg)
+		return
+	}
+
+	// Send confirmation
+	triggerList := strings.Join(cmd.Triggers, ", ")
+	confirmMsg := fmt.Sprintf("✅ Reaction filter created! Triggers: %s → %s", triggerList, cmd.Reaction)
+	sendConfirmation(bot, logger, accID, chatID, confirmMsg)
+}
+
+// downloadMediaIfNeeded ensures the quoted message media is downloaded and returns the updated message.
+func downloadMediaIfNeeded(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	quotedMsg *deltachat.MsgSnapshot,
+	quotedMsgID deltachat.MsgId,
+) (*deltachat.MsgSnapshot, error) {
+	if quotedMsg.DownloadState == deltachat.DownloadDone {
+		return quotedMsg, nil
+	}
+
+	if quotedMsg.DownloadState != deltachat.DownloadAvailable {
+		sendErrorMessage(bot, logger, accID, chatID, "❌ Media is not available for download.")
+		return nil, fmt.Errorf("media not available")
+	}
+
+	// Try to download it
+	if err := bot.Rpc.DownloadFullMessage(accID, quotedMsgID); err != nil {
+		errMsg := fmt.Sprintf("❌ Failed to download media: %v", err)
+		sendErrorMessage(bot, logger, accID, chatID, errMsg)
+		return nil, err
+	}
+
+	// Re-fetch the message after download
+	updatedMsg, err := bot.Rpc.GetMessage(accID, quotedMsgID)
+	if err != nil || updatedMsg.DownloadState != deltachat.DownloadDone {
+		sendErrorMessage(bot, logger, accID, chatID, "❌ Media download incomplete. Please try again in a moment.")
+		return nil, fmt.Errorf("download incomplete")
+	}
+
+	return updatedMsg, nil
+}
+
+// processMediaFile reads the media file, computes its hash, and saves it to storage.
+func processMediaFile(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	chatID deltachat.ChatId,
+	filePath string,
+	deps *domain.Dependencies,
+) (string, error) {
+	if filePath == "" {
+		sendErrorMessage(bot, logger, accID, chatID, "❌ No file path found in media message.")
+		return "", fmt.Errorf("no file path")
+	}
+
+	// #nosec G304 -- filePath comes from Delta Chat RPC API (quotedMsg.File), not user input
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		errMsg := fmt.Sprintf("❌ Failed to read media file: %v", err)
+		sendErrorMessage(bot, logger, accID, chatID, errMsg)
+		return "", err
+	}
+
+	// Compute SHA-512 hash
+	hash := sha512.Sum512(fileData)
+	mediaHash := hex.EncodeToString(hash[:])
+
+	// Save to media storage
+	if err := deps.MediaStorage.Save(mediaHash, fileData); err != nil {
+		errMsg := fmt.Sprintf("❌ Failed to save media file: %v", err)
+		sendErrorMessage(bot, logger, accID, chatID, errMsg)
+		return "", err
+	}
+
+	return mediaHash, nil
+}
+
+// handleMediaFilterCreation creates a media filter from a quoted message.
+func handleMediaFilterCreation(
+	bot *deltachat.Bot,
+	logger interface{ Errorf(string, ...interface{}) },
+	accID deltachat.AccountId,
+	msg *deltachat.MsgSnapshot,
+	dbChatID int64,
+	cmd *domain.FilterCommand,
+	normalizedTriggers []string,
+	isMediaFilter bool,
+	deps *domain.Dependencies,
+) {
+	ctx := context.Background()
+
+	// Media filters require a reply to a media message
+	if !isMediaFilter {
+		errMsg := "❌ To create a media filter, reply to a media message (image, sticker, GIF, or video) with the /filter command."
+		sendErrorMessage(bot, logger, accID, msg.ChatId, errMsg)
+		return
+	}
+
+	// Get the quoted message
+	quotedMsg, err := bot.Rpc.GetMessage(accID, msg.Quote.MessageId)
+	if err != nil {
+		errMsg := fmt.Sprintf("❌ Failed to get quoted message: %v", err)
+		sendErrorMessage(bot, logger, accID, msg.ChatId, errMsg)
+		return
+	}
+
+	// Check if the quoted message is a supported media type
+	mediaType := mapViewTypeToMediaType(quotedMsg.ViewType)
+	if mediaType == "" {
+		errMsg := fmt.Sprintf("❌ Unsupported media type: %s. Supported types: image, sticker, gif, video.", quotedMsg.ViewType)
+		sendErrorMessage(bot, logger, accID, msg.ChatId, errMsg)
+		return
+	}
+
+	// Ensure media is downloaded
+	quotedMsg, err = downloadMediaIfNeeded(bot, logger, accID, msg.ChatId, quotedMsg, msg.Quote.MessageId)
+	if err != nil {
+		return // Error already sent to user
+	}
+
+	// Process the media file (read, hash, save)
+	mediaHash, err := processMediaFile(bot, logger, accID, msg.ChatId, quotedMsg.File, deps)
+	if err != nil {
+		return // Error already sent to user
+	}
+
+	// Create media filter
+	err = deps.FilterRepository.CreateMediaFilter(ctx, dbChatID, normalizedTriggers, mediaHash, mediaType)
+	if err != nil {
+		// Clean up the saved file
+		_ = deps.MediaStorage.Delete(mediaHash)
+		errMsg := fmt.Sprintf("❌ Failed to create media filter: %v", err)
+		sendErrorMessage(bot, logger, accID, msg.ChatId, errMsg)
+		return
+	}
+
+	// Send confirmation
+	triggerList := strings.Join(cmd.Triggers, ", ")
+	confirmMsg := fmt.Sprintf("✅ Media filter created! Triggers: %s → [%s]", triggerList, mediaType)
+	sendConfirmation(bot, logger, accID, msg.ChatId, confirmMsg)
+}
+
 // handleFilterCommand processes a /filter command
-//
-//nolint:gocognit,gocyclo // TODO: Refactor this function to reduce complexity (gocognit: 97/30, gocyclo: 43/30)
 func handleFilterCommand(
 	bot *deltachat.Bot,
 	logger interface {
@@ -175,8 +421,6 @@ func handleFilterCommand(
 	msg *deltachat.MsgSnapshot,
 	deps *domain.Dependencies,
 ) {
-	ctx := context.Background()
-
 	// Convert chat ID safely
 	chatID, err := convertChatID(msg.ChatId)
 	if err != nil {
@@ -187,27 +431,14 @@ func handleFilterCommand(
 	// Parse the command
 	cmd, err := domain.ParseFilterCommand(msg.Text)
 	if err != nil {
-		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, "❌ Invalid command syntax. "+err.Error()); sendErr != nil {
-			logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-		}
+		sendErrorMessage(bot, logger, accID, msg.ChatId, "❌ Invalid command syntax. "+err.Error())
 		return
 	}
 
-	// Validate all triggers
-	for _, trigger := range cmd.Triggers {
-		if err := domain.ValidateTrigger(trigger); err != nil {
-			errMsg := fmt.Sprintf("❌ Invalid trigger '%s': %v", trigger, err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-	}
-
-	// Normalize triggers for storage
-	normalizedTriggers := make([]string, len(cmd.Triggers))
-	for i, trigger := range cmd.Triggers {
-		normalizedTriggers[i] = domain.NormalizeTrigger(trigger)
+	// Validate and normalize triggers
+	normalizedTriggers, ok := validateAndNormalizeTriggers(bot, logger, accID, msg.ChatId, cmd.Triggers)
+	if !ok {
+		return // Error already sent to user
 	}
 
 	// Check if this is a reply to a media message
@@ -216,156 +447,11 @@ func handleFilterCommand(
 	// Handle based on response type
 	switch cmd.ResponseType {
 	case domain.ResponseTypeText:
-		// If replying to a media message but response is text, that's probably an error
-		if isMediaFilter {
-			errMsg := "❌ You're replying to a media message. Did you mean to create a media filter? Remove the reply or use the command without text if you want to create a media filter."
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		err = deps.FilterRepository.CreateTextFilter(ctx, chatID, normalizedTriggers, cmd.ResponseText)
-		if err != nil {
-			errMsg := fmt.Sprintf("❌ Failed to create filter: %v", err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Send confirmation
-		triggerList := strings.Join(cmd.Triggers, ", ")
-		confirmMsg := fmt.Sprintf("✅ Filter created! Triggers: %s", triggerList)
-		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, confirmMsg); sendErr != nil {
-			logger.Errorf("Failed to send confirmation to chat %d: %v", msg.ChatId, sendErr)
-		}
-
+		handleTextFilterCreation(bot, logger, accID, msg.ChatId, chatID, cmd, normalizedTriggers, isMediaFilter, deps)
 	case domain.ResponseTypeReaction:
-		err = deps.FilterRepository.CreateReactionFilter(ctx, chatID, normalizedTriggers, cmd.Reaction)
-		if err != nil {
-			errMsg := fmt.Sprintf("❌ Failed to create reaction filter: %v", err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Send confirmation
-		triggerList := strings.Join(cmd.Triggers, ", ")
-		confirmMsg := fmt.Sprintf("✅ Reaction filter created! Triggers: %s → %s", triggerList, cmd.Reaction)
-		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, confirmMsg); sendErr != nil {
-			logger.Errorf("Failed to send confirmation to chat %d: %v", msg.ChatId, sendErr)
-		}
-
+		handleReactionFilterCreation(bot, logger, accID, msg.ChatId, chatID, cmd, normalizedTriggers, deps)
 	case domain.ResponseTypeMedia:
-		// Media filters require a reply to a media message
-		if !isMediaFilter {
-			errMsg := "❌ To create a media filter, reply to a media message (image, sticker, GIF, or video) with the /filter command."
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Get the quoted message
-		quotedMsg, err := bot.Rpc.GetMessage(accID, msg.Quote.MessageId)
-		if err != nil {
-			errMsg := fmt.Sprintf("❌ Failed to get quoted message: %v", err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Check if the quoted message is a supported media type
-		mediaType := mapViewTypeToMediaType(quotedMsg.ViewType)
-		if mediaType == "" {
-			errMsg := fmt.Sprintf("❌ Unsupported media type: %s. Supported types: image, sticker, gif, video.", quotedMsg.ViewType)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Check if media is downloaded
-		if quotedMsg.DownloadState != deltachat.DownloadDone {
-			if quotedMsg.DownloadState == deltachat.DownloadAvailable {
-				// Try to download it
-				if err := bot.Rpc.DownloadFullMessage(accID, msg.Quote.MessageId); err != nil {
-					errMsg := fmt.Sprintf("❌ Failed to download media: %v", err)
-					if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-						logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-					}
-					return
-				}
-				// Re-fetch the message after download
-				quotedMsg, err = bot.Rpc.GetMessage(accID, msg.Quote.MessageId)
-				if err != nil || quotedMsg.DownloadState != deltachat.DownloadDone {
-					errMsg := "❌ Media download incomplete. Please try again in a moment."
-					if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-						logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-					}
-					return
-				}
-			} else {
-				errMsg := "❌ Media is not available for download."
-				if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-					logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-				}
-				return
-			}
-		}
-
-		// Read the media file
-		if quotedMsg.File == "" {
-			errMsg := "❌ No file path found in media message."
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		fileData, err := os.ReadFile(quotedMsg.File)
-		if err != nil {
-			errMsg := fmt.Sprintf("❌ Failed to read media file: %v", err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Compute SHA-512 hash
-		hash := sha512.Sum512(fileData)
-		mediaHash := hex.EncodeToString(hash[:])
-
-		// Save to media storage
-		if err := deps.MediaStorage.Save(mediaHash, fileData); err != nil {
-			errMsg := fmt.Sprintf("❌ Failed to save media file: %v", err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Create media filter
-		err = deps.FilterRepository.CreateMediaFilter(ctx, chatID, normalizedTriggers, mediaHash, mediaType)
-		if err != nil {
-			// Clean up the saved file
-			_ = deps.MediaStorage.Delete(mediaHash)
-			errMsg := fmt.Sprintf("❌ Failed to create media filter: %v", err)
-			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-				logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-			}
-			return
-		}
-
-		// Send confirmation
-		triggerList := strings.Join(cmd.Triggers, ", ")
-		confirmMsg := fmt.Sprintf("✅ Media filter created! Triggers: %s → [%s]", triggerList, mediaType)
-		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, confirmMsg); sendErr != nil {
-			logger.Errorf("Failed to send confirmation to chat %d: %v", msg.ChatId, sendErr)
-		}
+		handleMediaFilterCreation(bot, logger, accID, msg, chatID, cmd, normalizedTriggers, isMediaFilter, deps)
 	}
 }
 
