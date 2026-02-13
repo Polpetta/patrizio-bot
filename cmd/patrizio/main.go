@@ -11,19 +11,20 @@ import (
 )
 
 func main() {
-	config.Load()
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
 	}
 
 	// Ensure media directory exists
+	// #nosec G301 - Directory needs to be readable by deltachat-rpc-server
 	if err := os.MkdirAll(cfg.MediaPath(), 0755); err != nil {
 		panic(err)
 	}
 
 	// Ensure database directory exists (SQLite creates the file, but not parent dirs)
 	dbDir := filepath.Dir(cfg.DBPath())
+	// #nosec G301 - Directory needs to be readable by deltachat-rpc-server
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		panic(err)
 	}

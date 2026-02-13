@@ -28,9 +28,9 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_EnvVarOverride(t *testing.T) {
 	os.Clearenv()
-	os.Setenv("PATRIZIO_DB_PATH", "/custom/db.db")
-	os.Setenv("PATRIZIO_LOG_LEVEL", "debug")
-	os.Setenv("PATRIZIO_MEDIA_PATH", "/custom/media")
+	_ = os.Setenv("PATRIZIO_DB_PATH", "/custom/db.db")
+	_ = os.Setenv("PATRIZIO_LOG_LEVEL", "debug")
+	_ = os.Setenv("PATRIZIO_MEDIA_PATH", "/custom/media")
 	defer os.Clearenv()
 
 	cfg, err := Load()
@@ -60,14 +60,15 @@ db_path = "/toml/db.db"
 log_level = "warn"
 media_path = "/toml/media"
 `
+	// #nosec G306 - Test file needs standard permissions
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write temp config: %v", err)
 	}
 
 	// Change to the temp dir so Load() can find the config
 	oldWd, _ := os.Getwd()
-	defer os.Chdir(oldWd)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldWd) }()
+	_ = os.Chdir(tmpDir)
 
 	cfg, err := Load()
 	if err != nil {
@@ -96,14 +97,15 @@ db_path = "/toml/db.db"
 log_level = "warn"
 media_path = "/toml/media"
 `
+	// #nosec G306 - Test file needs standard permissions
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write temp config: %v", err)
 	}
 
 	// Change to the temp dir so Load() can find the config
 	oldWd, _ := os.Getwd()
-	defer os.Chdir(oldWd)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldWd) }()
+	_ = os.Chdir(tmpDir)
 
 	// Set env vars that should override TOML
 	if err := os.Setenv("PATRIZIO_DB_PATH", "/env/db.db"); err != nil {

@@ -32,6 +32,7 @@ func (r *Repository) CreateTextFilter(ctx context.Context, chatID int64, trigger
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	//nolint:errcheck // Rollback in defer is safe to ignore - it's a no-op after Commit
 	defer tx.Rollback()
 
 	qtx := r.queries.WithTx(tx)
@@ -93,6 +94,7 @@ func (r *Repository) CreateMediaFilter(ctx context.Context, chatID int64, trigge
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	//nolint:errcheck // Rollback in defer is safe to ignore - it's a no-op after Commit
 	defer tx.Rollback()
 
 	qtx := r.queries.WithTx(tx)
@@ -155,6 +157,7 @@ func (r *Repository) CreateReactionFilter(ctx context.Context, chatID int64, tri
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	//nolint:errcheck // Rollback in defer is safe to ignore - it's a no-op after Commit
 	defer tx.Rollback()
 
 	qtx := r.queries.WithTx(tx)
@@ -216,6 +219,7 @@ func (r *Repository) RemoveTrigger(ctx context.Context, chatID int64, triggerTex
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	//nolint:errcheck // Rollback in defer is safe to ignore - it's a no-op after Commit
 	defer tx.Rollback()
 
 	qtx := r.queries.WithTx(tx)
@@ -290,6 +294,7 @@ func (r *Repository) RemoveAllFilters(ctx context.Context, chatID int64) ([]stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	//nolint:errcheck // Rollback in defer is safe to ignore - it's a no-op after Commit
 	defer tx.Rollback()
 
 	qtx := r.queries.WithTx(tx)

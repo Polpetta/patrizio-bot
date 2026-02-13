@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -20,8 +22,21 @@ Add me to a group and I'll respond to messages based on configured filters.
 
 I don't do much in direct messages — add me to a group to get started!`
 
+var errChatIDOverflow = errors.New("chat ID too large to convert")
+
+// convertChatID safely converts uint64 chat ID to int64 for database operations.
+func convertChatID(chatID deltachat.ChatId) (int64, error) {
+	// Delta Chat uses uint64 for ChatId, but SQLite's INTEGER PRIMARY KEY is int64.
+	// This conversion is safe because chat IDs in practice never exceed MaxInt64.
+	if uint64(chatID) > math.MaxInt64 {
+		return 0, errChatIDOverflow
+	}
+	//nolint:gosec // G115: Overflow checked explicitly above
+	return int64(chatID), nil
+}
+
 // newMsgHandler returns the OnNewMsg callback that routes incoming messages.
-func newMsgHandler(cli *botcli.BotCli, bot *deltachat.Bot, deps *domain.Dependencies) deltachat.NewMsgHandler {
+func newMsgHandler(cli *botcli.BotCli, _ *deltachat.Bot, deps *domain.Dependencies) deltachat.NewMsgHandler {
 	return func(bot *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
 		logger := cli.GetLogger(accID)
 
@@ -91,8 +106,15 @@ func handleGroupMessage(
 	// Normalize the incoming message for matching
 	normalizedMsg := domain.NormalizeMessage(msg.Text)
 
+	// Convert chat ID safely
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
+
 	// Find all matching filters for this chat
-	filters, err := deps.FilterRepository.FindMatchingFilters(ctx, int64(msg.ChatId), normalizedMsg)
+	filters, err := deps.FilterRepository.FindMatchingFilters(ctx, chatID, normalizedMsg)
 	if err != nil {
 		logger.Errorf("Failed to find matching filters for chat %d: %v", msg.ChatId, err)
 		return
@@ -141,6 +163,8 @@ func handleGroupMessage(
 }
 
 // handleFilterCommand processes a /filter command
+//
+//nolint:gocognit,gocyclo // TODO: Refactor this function to reduce complexity (gocognit: 97/30, gocyclo: 43/30)
 func handleFilterCommand(
 	bot *deltachat.Bot,
 	logger interface {
@@ -152,6 +176,13 @@ func handleFilterCommand(
 	deps *domain.Dependencies,
 ) {
 	ctx := context.Background()
+
+	// Convert chat ID safely
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
 
 	// Parse the command
 	cmd, err := domain.ParseFilterCommand(msg.Text)
@@ -194,7 +225,7 @@ func handleFilterCommand(
 			return
 		}
 
-		err = deps.FilterRepository.CreateTextFilter(ctx, int64(msg.ChatId), normalizedTriggers, cmd.ResponseText)
+		err = deps.FilterRepository.CreateTextFilter(ctx, chatID, normalizedTriggers, cmd.ResponseText)
 		if err != nil {
 			errMsg := fmt.Sprintf("❌ Failed to create filter: %v", err)
 			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
@@ -211,7 +242,7 @@ func handleFilterCommand(
 		}
 
 	case domain.ResponseTypeReaction:
-		err = deps.FilterRepository.CreateReactionFilter(ctx, int64(msg.ChatId), normalizedTriggers, cmd.Reaction)
+		err = deps.FilterRepository.CreateReactionFilter(ctx, chatID, normalizedTriggers, cmd.Reaction)
 		if err != nil {
 			errMsg := fmt.Sprintf("❌ Failed to create reaction filter: %v", err)
 			if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
@@ -318,7 +349,7 @@ func handleFilterCommand(
 		}
 
 		// Create media filter
-		err = deps.FilterRepository.CreateMediaFilter(ctx, int64(msg.ChatId), normalizedTriggers, mediaHash, mediaType)
+		err = deps.FilterRepository.CreateMediaFilter(ctx, chatID, normalizedTriggers, mediaHash, mediaType)
 		if err != nil {
 			// Clean up the saved file
 			_ = deps.MediaStorage.Delete(mediaHash)
@@ -367,6 +398,13 @@ func handleStopCommand(
 ) {
 	ctx := context.Background()
 
+	// Convert chat ID safely
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
+
 	// Parse the command
 	cmd, err := domain.ParseStopCommand(msg.Text)
 	if err != nil {
@@ -380,7 +418,7 @@ func handleStopCommand(
 	normalizedTrigger := domain.NormalizeTrigger(cmd.Trigger)
 
 	// Remove the trigger
-	mediaHash, err := deps.FilterRepository.RemoveTrigger(ctx, int64(msg.ChatId), normalizedTrigger)
+	mediaHash, err := deps.FilterRepository.RemoveTrigger(ctx, chatID, normalizedTrigger)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to remove trigger '%s': %v", cmd.Trigger, err)
 		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
@@ -417,8 +455,15 @@ func handleStopAllCommand(
 ) {
 	ctx := context.Background()
 
+	// Convert chat ID safely
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
+
 	// Remove all filters for this chat
-	mediaHashes, err := deps.FilterRepository.RemoveAllFilters(ctx, int64(msg.ChatId))
+	mediaHashes, err := deps.FilterRepository.RemoveAllFilters(ctx, chatID)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to remove filters: %v", err)
 		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
@@ -455,8 +500,15 @@ func handleFiltersCommand(
 ) {
 	ctx := context.Background()
 
+	// Convert chat ID safely
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
+
 	// Get all filters for this chat
-	filters, err := deps.FilterRepository.ListFilters(ctx, int64(msg.ChatId))
+	filters, err := deps.FilterRepository.ListFilters(ctx, chatID)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to list filters: %v", err)
 		if _, sendErr := bot.Rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {

@@ -24,6 +24,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 
 	// Run migrations
 	if err := database.Migrate(db, testMigrationsFS, "testdata/migrations"); err != nil {
+		_ = db.Close()
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
@@ -32,7 +33,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 
 func TestRepository_CreateTextFilter(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -66,7 +67,7 @@ func TestRepository_CreateTextFilter(t *testing.T) {
 
 func TestRepository_CreateTextFilter_DuplicateTrigger(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -86,7 +87,7 @@ func TestRepository_CreateTextFilter_DuplicateTrigger(t *testing.T) {
 
 func TestRepository_CreateMediaFilter(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -120,7 +121,7 @@ func TestRepository_CreateMediaFilter(t *testing.T) {
 
 func TestRepository_CreateReactionFilter(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -151,7 +152,7 @@ func TestRepository_CreateReactionFilter(t *testing.T) {
 
 func TestRepository_RemoveTrigger_RemovesFilter(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -183,7 +184,7 @@ func TestRepository_RemoveTrigger_RemovesFilter(t *testing.T) {
 
 func TestRepository_RemoveTrigger_KeepsFilter(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -215,7 +216,7 @@ func TestRepository_RemoveTrigger_KeepsFilter(t *testing.T) {
 
 func TestRepository_RemoveTrigger_ReturnsMediaHash(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -241,15 +242,15 @@ func TestRepository_RemoveTrigger_ReturnsMediaHash(t *testing.T) {
 
 func TestRepository_RemoveAllFilters(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
 
 	// Create multiple filters
-	repo.CreateTextFilter(ctx, 123, []string{"hello"}, "Hi!")
-	repo.CreateMediaFilter(ctx, 123, []string{"dog"}, "hash1", domain.MediaTypeImage)
-	repo.CreateMediaFilter(ctx, 123, []string{"cat"}, "hash2", domain.MediaTypeImage)
+	_ = repo.CreateTextFilter(ctx, 123, []string{"hello"}, "Hi!")
+	_ = repo.CreateMediaFilter(ctx, 123, []string{"dog"}, "hash1", domain.MediaTypeImage)
+	_ = repo.CreateMediaFilter(ctx, 123, []string{"cat"}, "hash2", domain.MediaTypeImage)
 
 	// Remove all
 	hashes, err := repo.RemoveAllFilters(ctx, 123)
@@ -274,15 +275,15 @@ func TestRepository_RemoveAllFilters(t *testing.T) {
 
 func TestRepository_FindMatchingFilters(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
 
 	// Create filters
-	repo.CreateTextFilter(ctx, 123, []string{"dog"}, "Woof!")
-	repo.CreateTextFilter(ctx, 123, []string{"i love dogs"}, "Dogs are great!")
-	repo.CreateReactionFilter(ctx, 123, []string{"lol"}, "😂")
+	_ = repo.CreateTextFilter(ctx, 123, []string{"dog"}, "Woof!")
+	_ = repo.CreateTextFilter(ctx, 123, []string{"i love dogs"}, "Dogs are great!")
+	_ = repo.CreateReactionFilter(ctx, 123, []string{"lol"}, "😂")
 
 	tests := []struct {
 		name     string
@@ -337,7 +338,7 @@ func TestRepository_FindMatchingFilters(t *testing.T) {
 
 func TestRepository_CascadeDelete(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
@@ -366,7 +367,7 @@ func TestRepository_CascadeDelete(t *testing.T) {
 
 func TestRepository_InvalidTrigger(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := New(db)
 	ctx := context.Background()
