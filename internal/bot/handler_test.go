@@ -261,7 +261,7 @@ func TestHandleFilterCommand_TextFilter(t *testing.T) {
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if !repo.createTextFilterCalled {
 		t.Fatal("expected CreateTextFilter to be called")
@@ -273,12 +273,15 @@ func TestHandleFilterCommand_TextFilter(t *testing.T) {
 		t.Errorf("unexpected triggers: %v", repo.lastTriggers)
 	}
 
-	// Should have sent a confirmation
-	if len(rpc.sentMessages) != 1 {
-		t.Fatalf("expected 1 sent message (confirmation), got %d", len(rpc.sentMessages))
+	// Should have sent a confirmation as a quote-reply via SendMsg
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg call (confirmation), got %d", len(rpc.sentMsgData))
 	}
-	if rpc.sentMessages[0].chatID != 100 {
-		t.Errorf("expected confirmation sent to chat 100, got %d", rpc.sentMessages[0].chatID)
+	if rpc.sentMsgData[0].chatID != 100 {
+		t.Errorf("expected confirmation sent to chat 100, got %d", rpc.sentMsgData[0].chatID)
+	}
+	if rpc.sentMsgData[0].data.QuotedMessageId != 7 {
+		t.Errorf("expected QuotedMessageId 7, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
 	}
 }
 
@@ -300,7 +303,7 @@ func TestHandleFilterCommand_ReactionFilter(t *testing.T) {
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if !repo.createReactionFilterCalled {
 		t.Fatal("expected CreateReactionFilter to be called")
@@ -338,7 +341,7 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -362,9 +365,12 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 		t.Error("expected media to be saved to storage")
 	}
 
-	// Should have sent a confirmation
-	if len(rpc.sentMessages) != 1 {
-		t.Fatalf("expected 1 sent message (confirmation), got %d", len(rpc.sentMessages))
+	// Should have sent a confirmation as a quote-reply via SendMsg
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg call (confirmation), got %d", len(rpc.sentMsgData))
+	}
+	if rpc.sentMsgData[0].data.QuotedMessageId != 7 {
+		t.Errorf("expected QuotedMessageId 7, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
 	}
 }
 
@@ -393,7 +399,7 @@ func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) 
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -448,7 +454,7 @@ func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -498,7 +504,7 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -533,15 +539,18 @@ func TestHandleFilterCommand_MediaNoAttachmentNoQuote(t *testing.T) {
 		MediaStorage:     storage,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), msg, deps)
+	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
 
 	if repo.createMediaFilterCalled || repo.createTextFilterCalled {
 		t.Fatal("no filter should have been created")
 	}
 
-	// Should have sent an error message about needing media
-	if len(rpc.sentMessages) != 1 {
-		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMessages))
+	// Should have sent an error message as a quote-reply via SendMsg
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg call (error message), got %d", len(rpc.sentMsgData))
+	}
+	if rpc.sentMsgData[0].data.QuotedMessageId != 7 {
+		t.Errorf("expected QuotedMessageId 7, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
 	}
 }
 

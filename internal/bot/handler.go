@@ -94,16 +94,16 @@ func handleGroupMessage(
 	if cmdType != "" {
 		switch cmdType {
 		case domain.CommandFilter:
-			handleFilterCommand(rpc, logger, accID, msg, deps)
+			handleFilterCommand(rpc, logger, accID, msgID, msg, deps)
 			return
 		case domain.CommandStop:
-			handleStopCommand(rpc, logger, accID, msg, deps)
+			handleStopCommand(rpc, logger, accID, msgID, msg, deps)
 			return
 		case domain.CommandStopAll:
-			handleStopAllCommand(rpc, logger, accID, msg, deps)
+			handleStopAllCommand(rpc, logger, accID, msgID, msg, deps)
 			return
 		case domain.CommandFilters:
-			handleFiltersCommand(rpc, logger, accID, msg, deps)
+			handleFiltersCommand(rpc, logger, accID, msgID, msg, deps)
 			return
 		}
 	}
@@ -181,28 +181,36 @@ func handleGroupMessage(
 	}
 }
 
-// sendErrorMessage sends an error message to the chat and logs if sending fails.
+// sendErrorMessage sends an error message as a quote-reply and logs if sending fails.
 func sendErrorMessage(
 	rpc rpcClient,
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	message string,
 ) {
-	if _, err := rpc.MiscSendTextMessage(accID, chatID, message); err != nil {
+	if _, err := rpc.SendMsg(accID, chatID, deltachat.MsgData{
+		Text:            message,
+		QuotedMessageId: replyTo,
+	}); err != nil {
 		logger.Errorf("Failed to send error message to chat %d: %v", chatID, err)
 	}
 }
 
-// sendConfirmation sends a confirmation message to the chat and logs if sending fails.
+// sendConfirmation sends a confirmation message as a quote-reply and logs if sending fails.
 func sendConfirmation(
 	rpc rpcClient,
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	message string,
 ) {
-	if _, err := rpc.MiscSendTextMessage(accID, chatID, message); err != nil {
+	if _, err := rpc.SendMsg(accID, chatID, deltachat.MsgData{
+		Text:            message,
+		QuotedMessageId: replyTo,
+	}); err != nil {
 		logger.Errorf("Failed to send confirmation to chat %d: %v", chatID, err)
 	}
 }
@@ -213,13 +221,14 @@ func validateAndNormalizeTriggers(
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	triggers []string,
 ) ([]string, bool) {
 	// Validate all triggers
 	for _, trigger := range triggers {
 		if err := domain.ValidateTrigger(trigger); err != nil {
 			errMsg := fmt.Sprintf("❌ Invalid trigger '%s': %v", trigger, err)
-			sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+			sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 			return nil, false
 		}
 	}
@@ -239,6 +248,7 @@ func handleTextFilterCreation(
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	dbChatID int64,
 	cmd *domain.FilterCommand,
 	normalizedTriggers []string,
@@ -250,21 +260,21 @@ func handleTextFilterCreation(
 	// If replying to a media message but response is text, that's probably an error
 	if isMediaFilter {
 		errMsg := "❌ You're replying to a media message. Did you mean to create a media filter? Remove the reply or use the command without text if you want to create a media filter."
-		sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 		return
 	}
 
 	err := deps.FilterRepository.CreateTextFilter(ctx, dbChatID, normalizedTriggers, cmd.ResponseText)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to create filter: %v", err)
-		sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 		return
 	}
 
 	// Send confirmation
 	triggerList := strings.Join(cmd.Triggers, ", ")
 	confirmMsg := fmt.Sprintf("✅ Filter created! Triggers: %s", triggerList)
-	sendConfirmation(rpc, logger, accID, chatID, confirmMsg)
+	sendConfirmation(rpc, logger, accID, chatID, replyTo, confirmMsg)
 }
 
 // handleReactionFilterCreation creates a reaction filter and sends confirmation.
@@ -273,6 +283,7 @@ func handleReactionFilterCreation(
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	dbChatID int64,
 	cmd *domain.FilterCommand,
 	normalizedTriggers []string,
@@ -283,14 +294,14 @@ func handleReactionFilterCreation(
 	err := deps.FilterRepository.CreateReactionFilter(ctx, dbChatID, normalizedTriggers, cmd.Reaction)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to create reaction filter: %v", err)
-		sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 		return
 	}
 
 	// Send confirmation
 	triggerList := strings.Join(cmd.Triggers, ", ")
 	confirmMsg := fmt.Sprintf("✅ Reaction filter created! Triggers: %s → %s", triggerList, cmd.Reaction)
-	sendConfirmation(rpc, logger, accID, chatID, confirmMsg)
+	sendConfirmation(rpc, logger, accID, chatID, replyTo, confirmMsg)
 }
 
 // downloadMediaIfNeeded ensures the quoted message media is downloaded and returns the updated message.
@@ -299,6 +310,7 @@ func downloadMediaIfNeeded(
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	quotedMsg *deltachat.MsgSnapshot,
 	quotedMsgID deltachat.MsgId,
 ) (*deltachat.MsgSnapshot, error) {
@@ -307,21 +319,21 @@ func downloadMediaIfNeeded(
 	}
 
 	if quotedMsg.DownloadState != deltachat.DownloadAvailable {
-		sendErrorMessage(rpc, logger, accID, chatID, "❌ Media is not available for download.")
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, "❌ Media is not available for download.")
 		return nil, fmt.Errorf("media not available")
 	}
 
 	// Try to download it
 	if err := rpc.DownloadFullMessage(accID, quotedMsgID); err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to download media: %v", err)
-		sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 		return nil, err
 	}
 
 	// Re-fetch the message after download
 	updatedMsg, err := rpc.GetMessage(accID, quotedMsgID)
 	if err != nil || updatedMsg.DownloadState != deltachat.DownloadDone {
-		sendErrorMessage(rpc, logger, accID, chatID, "❌ Media download incomplete. Please try again in a moment.")
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, "❌ Media download incomplete. Please try again in a moment.")
 		return nil, fmt.Errorf("download incomplete")
 	}
 
@@ -334,11 +346,12 @@ func processMediaFile(
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
+	replyTo deltachat.MsgId,
 	filePath string,
 	deps *domain.Dependencies,
 ) (string, error) {
 	if filePath == "" {
-		sendErrorMessage(rpc, logger, accID, chatID, "❌ No file path found in media message.")
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, "❌ No file path found in media message.")
 		return "", fmt.Errorf("no file path")
 	}
 
@@ -346,7 +359,7 @@ func processMediaFile(
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to read media file: %v", err)
-		sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 		return "", err
 	}
 
@@ -357,7 +370,7 @@ func processMediaFile(
 	// Save to media storage
 	if err := deps.MediaStorage.Save(mediaHash, fileData); err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to save media file: %v", err)
-		sendErrorMessage(rpc, logger, accID, chatID, errMsg)
+		sendErrorMessage(rpc, logger, accID, chatID, replyTo, errMsg)
 		return "", err
 	}
 
@@ -370,6 +383,7 @@ func handleMediaFilterCreation(
 	logger interface{ Errorf(string, ...interface{}) },
 	accID deltachat.AccountId,
 	msg *deltachat.MsgSnapshot,
+	replyTo deltachat.MsgId,
 	dbChatID int64,
 	cmd *domain.FilterCommand,
 	normalizedTriggers []string,
@@ -381,7 +395,7 @@ func handleMediaFilterCreation(
 
 	if !hasAttachedMedia && !hasQuotedMedia {
 		errMsg := "❌ To create a media filter, attach media (image, sticker, GIF, or video) to the /filter command, or reply to a media message."
-		sendErrorMessage(rpc, logger, accID, msg.ChatId, errMsg)
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, replyTo, errMsg)
 		return
 	}
 
@@ -394,19 +408,19 @@ func handleMediaFilterCreation(
 		quotedMsg, err := rpc.GetMessage(accID, msg.Quote.MessageId)
 		if err != nil {
 			errMsg := fmt.Sprintf("❌ Failed to get quoted message: %v", err)
-			sendErrorMessage(rpc, logger, accID, msg.ChatId, errMsg)
+			sendErrorMessage(rpc, logger, accID, msg.ChatId, replyTo, errMsg)
 			return
 		}
 
 		// Check if the quoted message is a supported media type
 		if mapViewTypeToMediaType(quotedMsg.ViewType) == "" {
 			errMsg := fmt.Sprintf("❌ Unsupported media type: %s. Supported types: image, sticker, gif, video.", quotedMsg.ViewType)
-			sendErrorMessage(rpc, logger, accID, msg.ChatId, errMsg)
+			sendErrorMessage(rpc, logger, accID, msg.ChatId, replyTo, errMsg)
 			return
 		}
 
 		// Ensure media is downloaded
-		quotedMsg, err = downloadMediaIfNeeded(rpc, logger, accID, msg.ChatId, quotedMsg, msg.Quote.MessageId)
+		quotedMsg, err = downloadMediaIfNeeded(rpc, logger, accID, msg.ChatId, replyTo, quotedMsg, msg.Quote.MessageId)
 		if err != nil {
 			return // Error already sent to user
 		}
@@ -416,7 +430,7 @@ func handleMediaFilterCreation(
 	mediaType := mapViewTypeToMediaType(mediaMsg.ViewType)
 
 	// Process the media file (read, hash, save)
-	mediaHash, err := processMediaFile(rpc, logger, accID, msg.ChatId, mediaMsg.File, deps)
+	mediaHash, err := processMediaFile(rpc, logger, accID, msg.ChatId, replyTo, mediaMsg.File, deps)
 	if err != nil {
 		return // Error already sent to user
 	}
@@ -427,14 +441,14 @@ func handleMediaFilterCreation(
 		// Clean up the saved file
 		_ = deps.MediaStorage.Delete(mediaHash)
 		errMsg := fmt.Sprintf("❌ Failed to create media filter: %v", err)
-		sendErrorMessage(rpc, logger, accID, msg.ChatId, errMsg)
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, replyTo, errMsg)
 		return
 	}
 
 	// Send confirmation
 	triggerList := strings.Join(cmd.Triggers, ", ")
 	confirmMsg := fmt.Sprintf("✅ Media filter created! Triggers: %s → [%s]", triggerList, mediaType)
-	sendConfirmation(rpc, logger, accID, msg.ChatId, confirmMsg)
+	sendConfirmation(rpc, logger, accID, msg.ChatId, replyTo, confirmMsg)
 }
 
 // handleFilterCommand processes a /filter command
@@ -445,6 +459,7 @@ func handleFilterCommand(
 		Errorf(string, ...interface{})
 	},
 	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
 	deps *domain.Dependencies,
 ) {
@@ -458,12 +473,12 @@ func handleFilterCommand(
 	// Parse the command
 	cmd, err := domain.ParseFilterCommand(msg.Text)
 	if err != nil {
-		sendErrorMessage(rpc, logger, accID, msg.ChatId, "❌ Invalid command syntax. "+err.Error())
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID, "❌ Invalid command syntax. "+err.Error())
 		return
 	}
 
 	// Validate and normalize triggers
-	normalizedTriggers, ok := validateAndNormalizeTriggers(rpc, logger, accID, msg.ChatId, cmd.Triggers)
+	normalizedTriggers, ok := validateAndNormalizeTriggers(rpc, logger, accID, msg.ChatId, msgID, cmd.Triggers)
 	if !ok {
 		return // Error already sent to user
 	}
@@ -476,11 +491,11 @@ func handleFilterCommand(
 	// Handle based on response type
 	switch cmd.ResponseType {
 	case domain.ResponseTypeText:
-		handleTextFilterCreation(rpc, logger, accID, msg.ChatId, chatID, cmd, normalizedTriggers, hasMedia, deps)
+		handleTextFilterCreation(rpc, logger, accID, msg.ChatId, msgID, chatID, cmd, normalizedTriggers, hasMedia, deps)
 	case domain.ResponseTypeReaction:
-		handleReactionFilterCreation(rpc, logger, accID, msg.ChatId, chatID, cmd, normalizedTriggers, deps)
+		handleReactionFilterCreation(rpc, logger, accID, msg.ChatId, msgID, chatID, cmd, normalizedTriggers, deps)
 	case domain.ResponseTypeMedia:
-		handleMediaFilterCreation(rpc, logger, accID, msg, chatID, cmd, normalizedTriggers, hasQuotedMedia, hasAttachedMedia, deps)
+		handleMediaFilterCreation(rpc, logger, accID, msg, msgID, chatID, cmd, normalizedTriggers, hasQuotedMedia, hasAttachedMedia, deps)
 	}
 }
 
@@ -524,6 +539,7 @@ func handleStopCommand(
 		Errorf(string, ...interface{})
 	},
 	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
 	deps *domain.Dependencies,
 ) {
@@ -539,9 +555,7 @@ func handleStopCommand(
 	// Parse the command
 	cmd, err := domain.ParseStopCommand(msg.Text)
 	if err != nil {
-		if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, "❌ Invalid command syntax. "+err.Error()); sendErr != nil {
-			logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-		}
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID, "❌ Invalid command syntax. "+err.Error())
 		return
 	}
 
@@ -552,9 +566,7 @@ func handleStopCommand(
 	mediaHash, err := deps.FilterRepository.RemoveTrigger(ctx, chatID, normalizedTrigger)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to remove trigger '%s': %v", cmd.Trigger, err)
-		if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-			logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-		}
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID, errMsg)
 		return
 	}
 
@@ -568,9 +580,7 @@ func handleStopCommand(
 
 	// Send confirmation
 	confirmMsg := fmt.Sprintf("✅ Trigger '%s' removed", cmd.Trigger)
-	if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, confirmMsg); sendErr != nil {
-		logger.Errorf("Failed to send confirmation to chat %d: %v", msg.ChatId, sendErr)
-	}
+	sendConfirmation(rpc, logger, accID, msg.ChatId, msgID, confirmMsg)
 }
 
 // handleStopAllCommand processes a /stopall command
@@ -581,6 +591,7 @@ func handleStopAllCommand(
 		Errorf(string, ...interface{})
 	},
 	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
 	deps *domain.Dependencies,
 ) {
@@ -597,9 +608,7 @@ func handleStopAllCommand(
 	mediaHashes, err := deps.FilterRepository.RemoveAllFilters(ctx, chatID)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to remove filters: %v", err)
-		if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-			logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-		}
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID, errMsg)
 		return
 	}
 
@@ -612,10 +621,7 @@ func handleStopAllCommand(
 	}
 
 	// Send confirmation
-	confirmMsg := "✅ All filters removed from this chat"
-	if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, confirmMsg); sendErr != nil {
-		logger.Errorf("Failed to send confirmation to chat %d: %v", msg.ChatId, sendErr)
-	}
+	sendConfirmation(rpc, logger, accID, msg.ChatId, msgID, "✅ All filters removed from this chat")
 }
 
 // handleFiltersCommand processes a /filters command
@@ -626,6 +632,7 @@ func handleFiltersCommand(
 		Errorf(string, ...interface{})
 	},
 	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
 	deps *domain.Dependencies,
 ) {
@@ -642,17 +649,13 @@ func handleFiltersCommand(
 	filters, err := deps.FilterRepository.ListFilters(ctx, chatID)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to list filters: %v", err)
-		if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, errMsg); sendErr != nil {
-			logger.Errorf("Failed to send error message to chat %d: %v", msg.ChatId, sendErr)
-		}
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID, errMsg)
 		return
 	}
 
 	// Check if there are no filters
 	if len(filters) == 0 {
-		if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, "No filters configured for this chat."); sendErr != nil {
-			logger.Errorf("Failed to send message to chat %d: %v", msg.ChatId, sendErr)
-		}
+		sendConfirmation(rpc, logger, accID, msg.ChatId, msgID, "No filters configured for this chat.")
 		return
 	}
 
@@ -690,9 +693,7 @@ func handleFiltersCommand(
 	}
 
 	// Send the list
-	if _, sendErr := rpc.MiscSendTextMessage(accID, msg.ChatId, sb.String()); sendErr != nil {
-		logger.Errorf("Failed to send filter list to chat %d: %v", msg.ChatId, sendErr)
-	}
+	sendConfirmation(rpc, logger, accID, msg.ChatId, msgID, sb.String())
 }
 
 // handleDMMessage processes a direct message by replying with help text.
