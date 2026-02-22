@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/chatmail/rpc-client-go/deltachat"
@@ -349,9 +350,9 @@ func processMediaFile(
 		return "", err
 	}
 
-	// Compute SHA-512 hash
+	// Compute SHA-512 hash and preserve original file extension
 	hash := sha512.Sum512(fileData)
-	mediaHash := hex.EncodeToString(hash[:])
+	mediaHash := hex.EncodeToString(hash[:]) + filepath.Ext(filePath)
 
 	// Save to media storage
 	if err := deps.MediaStorage.Save(mediaHash, fileData); err != nil {

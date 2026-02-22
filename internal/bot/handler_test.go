@@ -317,7 +317,7 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 	// Write a real temp file so processMediaFile can os.ReadFile it
 	mediaContent := []byte("fake-image-data-for-test")
 	mediaPath := writeTempFile(t, mediaContent)
-	expectedHash := computeSHA512(mediaContent)
+	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
 	rpc := &mockRPC{}
 	repo := &mockFilterRepository{}
@@ -373,7 +373,7 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) {
 	mediaContent := []byte("another-fake-image")
 	mediaPath := writeTempFile(t, mediaContent)
-	expectedHash := computeSHA512(mediaContent)
+	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
 	rpc := &mockRPC{}
 	repo := &mockFilterRepository{}
@@ -412,7 +412,7 @@ func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) 
 func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 	mediaContent := []byte("quoted-media-content")
 	mediaPath := writeTempFile(t, mediaContent)
-	expectedHash := computeSHA512(mediaContent)
+	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
 	rpc := &mockRPC{}
 	repo := &mockFilterRepository{}
@@ -469,7 +469,7 @@ func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T) {
 	mediaContent := []byte("attached-media-wins")
 	mediaPath := writeTempFile(t, mediaContent)
-	expectedHash := computeSHA512(mediaContent)
+	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
 	rpc := &mockRPC{}
 	repo := &mockFilterRepository{}
