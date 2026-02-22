@@ -80,7 +80,12 @@ func ParseFilterCommand(text string) (*FilterCommand, error) {
 	}
 
 	if remaining == "" {
-		return nil, fmt.Errorf("%w: no response provided", ErrInvalidCommand)
+		// No text response provided — the response is expected to come from
+		// attached or quoted media (image, sticker, GIF, video).
+		return &FilterCommand{
+			Triggers:     triggers,
+			ResponseType: ResponseTypeMedia,
+		}, nil
 	}
 
 	// Check if response is a reaction (react:emoji)

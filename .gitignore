@@ -47,3 +47,4 @@ Thumbs.db
 # sqlc generated code (regenerated via make sqlc)
 # Uncomment if you prefer not to track generated code:
 # internal/database/queries/
+/data/

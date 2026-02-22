@@ -3,9 +3,10 @@ module github.com/polpetta/patrizio
 go 1.25.7
 
 require (
-	github.com/chatmail/rpc-client-go v1.2.15-0.20250915190709-8b6470d63ebe
+	github.com/chatmail/rpc-client-go v1.2.15-0.20260215043703-c87f0dc641be
 	github.com/deltachat-bot/deltabot-cli-go v1.2.14
 	github.com/pressly/goose/v3 v3.26.0
+	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.21.0
 	modernc.org/sqlite v1.45.0
@@ -27,7 +28,6 @@ require (
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
-	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect

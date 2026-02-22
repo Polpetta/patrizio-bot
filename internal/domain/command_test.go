@@ -98,13 +98,46 @@ func TestParseFilterCommand_Reaction(t *testing.T) {
 	}
 }
 
+func TestParseFilterCommand_MediaNoResponse(t *testing.T) {
+	cmd, err := ParseFilterCommand("/filter cat")
+	if err != nil {
+		t.Fatalf("ParseFilterCommand failed: %v", err)
+	}
+
+	if len(cmd.Triggers) != 1 {
+		t.Errorf("Expected 1 trigger, got %d", len(cmd.Triggers))
+	}
+	if cmd.Triggers[0] != "cat" {
+		t.Errorf("Trigger = %q, want %q", cmd.Triggers[0], "cat")
+	}
+	if cmd.ResponseType != ResponseTypeMedia {
+		t.Errorf("ResponseType = %q, want %q", cmd.ResponseType, ResponseTypeMedia)
+	}
+}
+
+func TestParseFilterCommand_MediaNoResponseMultipleTriggers(t *testing.T) {
+	cmd, err := ParseFilterCommand("/filter (cat, dog)")
+	if err != nil {
+		t.Fatalf("ParseFilterCommand failed: %v", err)
+	}
+
+	if len(cmd.Triggers) != 2 {
+		t.Fatalf("Expected 2 triggers, got %d", len(cmd.Triggers))
+	}
+	if cmd.Triggers[0] != "cat" || cmd.Triggers[1] != "dog" {
+		t.Errorf("Triggers = %v, want [cat, dog]", cmd.Triggers)
+	}
+	if cmd.ResponseType != ResponseTypeMedia {
+		t.Errorf("ResponseType = %q, want %q", cmd.ResponseType, ResponseTypeMedia)
+	}
+}
+
 func TestParseFilterCommand_Errors(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
 	}{
 		{"Empty", "/filter"},
-		{"No response", "/filter hello"},
 		{"Unclosed quote", "/filter \"hello"},
 		{"Unclosed parenthesis", "/filter (hello, hi"},
 		{"Empty reaction", "/filter lol react:"},
