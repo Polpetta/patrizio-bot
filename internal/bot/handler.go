@@ -140,18 +140,30 @@ func handleGroupMessage(
 			// we'll need to use the quote field in message data if available
 
 		case domain.ResponseTypeMedia:
-			// Read media file from storage
-			mediaData, err := deps.MediaStorage.Read(filter.MediaHash)
-			if err != nil {
-				logger.Errorf("Failed to read media file %s: %v", filter.MediaHash, err)
+			// Look up the media file path from storage
+			mediaPath := deps.MediaStorage.Path(filter.MediaHash)
+			exists, err := deps.MediaStorage.Exists(filter.MediaHash)
+			if err != nil || !exists {
+				logger.Errorf("Media file %s not found in storage", filter.MediaHash)
 				continue
 			}
 
-			// Send media (implementation depends on Delta Chat RPC media sending API)
-			// This is a placeholder - actual implementation will need the proper RPC method
-			logger.Infof("Would send media %s (%s) to chat %d in response to msg %d",
-				filter.MediaHash, filter.MediaType, msg.ChatId, msgID)
-			_ = mediaData // Use the data when proper API is available
+			// Map domain media type back to Delta Chat view type
+			viewType := mapMediaTypeToViewType(filter.MediaType)
+			if viewType == "" {
+				logger.Errorf("Unknown media type %s for filter %d", filter.MediaType, filter.FilterID)
+				continue
+			}
+
+			// Send the media message
+			_, err = rpc.SendMsg(accID, msg.ChatId, deltachat.MsgData{
+				File:     mediaPath,
+				ViewType: viewType,
+			})
+			if err != nil {
+				logger.Errorf("Failed to send media response to chat %d: %v", msg.ChatId, err)
+				continue
+			}
 
 		case domain.ResponseTypeReaction:
 			// Send reaction to the triggering message
@@ -481,6 +493,22 @@ func mapViewTypeToMediaType(viewType deltachat.MsgType) string {
 		return domain.MediaTypeGIF
 	case deltachat.MsgVideo:
 		return domain.MediaTypeVideo
+	default:
+		return ""
+	}
+}
+
+// mapMediaTypeToViewType maps our media type constants back to Delta Chat view types
+func mapMediaTypeToViewType(mediaType string) deltachat.MsgType {
+	switch mediaType {
+	case domain.MediaTypeImage:
+		return deltachat.MsgImage
+	case domain.MediaTypeSticker:
+		return deltachat.MsgSticker
+	case domain.MediaTypeGIF:
+		return deltachat.MsgGif
+	case domain.MediaTypeVideo:
+		return deltachat.MsgVideo
 	default:
 		return ""
 	}

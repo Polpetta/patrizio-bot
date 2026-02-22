@@ -24,6 +24,9 @@ type mockRPC struct {
 	// MiscSendTextMessage
 	sentMessages []sentMessage
 	sendErr      error
+	// SendMsg
+	sentMsgData []sentMsgDataEntry
+	sendMsgErr  error
 	// SendReaction
 	sentReactions []sentReaction
 	reactionErr   error
@@ -44,6 +47,12 @@ type sentReaction struct {
 	reaction []string
 }
 
+type sentMsgDataEntry struct {
+	accID  deltachat.AccountId
+	chatID deltachat.ChatId
+	data   deltachat.MsgData
+}
+
 func (m *mockRPC) GetMessage(accID deltachat.AccountId, msgID deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
 	if m.getMessageFn != nil {
 		return m.getMessageFn(accID, msgID)
@@ -61,6 +70,11 @@ func (m *mockRPC) GetBasicChatInfo(accID deltachat.AccountId, chatID deltachat.C
 func (m *mockRPC) MiscSendTextMessage(accID deltachat.AccountId, chatID deltachat.ChatId, text string) (deltachat.MsgId, error) {
 	m.sentMessages = append(m.sentMessages, sentMessage{accID: accID, chatID: chatID, text: text})
 	return deltachat.MsgId(1), m.sendErr
+}
+
+func (m *mockRPC) SendMsg(accID deltachat.AccountId, chatID deltachat.ChatId, data deltachat.MsgData) (deltachat.MsgId, error) {
+	m.sentMsgData = append(m.sentMsgData, sentMsgDataEntry{accID: accID, chatID: chatID, data: data})
+	return deltachat.MsgId(1), m.sendMsgErr
 }
 
 func (m *mockRPC) SendReaction(accID deltachat.AccountId, msgID deltachat.MsgId, reaction ...string) (deltachat.MsgId, error) {
@@ -150,12 +164,13 @@ func (m *mockFilterRepository) FindMatchingFilters(_ context.Context, _ int64, _
 // --- Mock MediaStorage ---
 
 type mockMediaStorage struct {
-	saved   map[string][]byte
-	saveErr error
+	saved    map[string][]byte
+	saveErr  error
+	basePath string // returned by Path; defaults to "/mock/media"
 }
 
 func newMockMediaStorage() *mockMediaStorage {
-	return &mockMediaStorage{saved: make(map[string][]byte)}
+	return &mockMediaStorage{saved: make(map[string][]byte), basePath: "/mock/media"}
 }
 
 func (m *mockMediaStorage) Save(hash string, data []byte) error {
@@ -177,6 +192,10 @@ func (m *mockMediaStorage) Read(hash string) ([]byte, error) {
 		return nil, fmt.Errorf("not found")
 	}
 	return data, nil
+}
+
+func (m *mockMediaStorage) Path(hash string) string {
+	return filepath.Join(m.basePath, hash)
 }
 
 func (m *mockMediaStorage) Exists(hash string) (bool, error) {
@@ -614,6 +633,99 @@ func TestHandleGroupMessage_ReactionFilterMatch(t *testing.T) {
 	}
 	if rpc.sentReactions[0].msgID != 5 {
 		t.Errorf("expected reaction on msgID 5, got %d", rpc.sentReactions[0].msgID)
+	}
+}
+
+func TestHandleGroupMessage_MediaFilterMatch(t *testing.T) {
+	mediaHash := "abc123hash"
+	storage := newMockMediaStorage()
+	// Pre-populate storage with the media file so Exists returns true
+	storage.saved[mediaHash] = []byte("fake-image-bytes")
+
+	rpc := &mockRPC{}
+	repo := &mockFilterRepository{
+		matchingFilters: []domain.FilterResponse{
+			{
+				FilterID:     1,
+				ResponseType: domain.ResponseTypeMedia,
+				MediaHash:    mediaHash,
+				MediaType:    domain.MediaTypeImage,
+			},
+		},
+	}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId:   100,
+		FromId:   42,
+		Text:     "show me a cat",
+		ViewType: deltachat.MsgText,
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     storage,
+	}
+
+	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	if len(logger.errors) > 0 {
+		t.Fatalf("unexpected errors: %v", logger.errors)
+	}
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg call, got %d", len(rpc.sentMsgData))
+	}
+	sent := rpc.sentMsgData[0]
+	if sent.chatID != 100 {
+		t.Errorf("expected chatID 100, got %d", sent.chatID)
+	}
+	expectedPath := filepath.Join("/mock/media", mediaHash)
+	if sent.data.File != expectedPath {
+		t.Errorf("expected file path %q, got %q", expectedPath, sent.data.File)
+	}
+	if sent.data.ViewType != deltachat.MsgImage {
+		t.Errorf("expected ViewType %q, got %q", deltachat.MsgImage, sent.data.ViewType)
+	}
+}
+
+func TestHandleGroupMessage_MediaFilterMatch_MissingFile(t *testing.T) {
+	mediaHash := "nonexistent-hash"
+	storage := newMockMediaStorage()
+	// Do NOT populate storage — file does not exist
+
+	rpc := &mockRPC{}
+	repo := &mockFilterRepository{
+		matchingFilters: []domain.FilterResponse{
+			{
+				FilterID:     1,
+				ResponseType: domain.ResponseTypeMedia,
+				MediaHash:    mediaHash,
+				MediaType:    domain.MediaTypeImage,
+			},
+		},
+	}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId:   100,
+		FromId:   42,
+		Text:     "show me a cat",
+		ViewType: deltachat.MsgText,
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     storage,
+	}
+
+	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	// Should have logged an error, not sent anything
+	if len(rpc.sentMsgData) != 0 {
+		t.Errorf("expected no SendMsg calls, got %d", len(rpc.sentMsgData))
+	}
+	if len(logger.errors) == 0 {
+		t.Error("expected an error to be logged for missing media file")
 	}
 }
 

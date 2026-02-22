@@ -40,6 +40,11 @@ func (s *Storage) Delete(hash string) error {
 	return nil
 }
 
+// Path returns the filesystem path for a media file identified by its hash.
+func (s *Storage) Path(hash string) string {
+	return filepath.Join(s.path, hash)
+}
+
 // Read retrieves media data by its hash.
 func (s *Storage) Read(hash string) ([]byte, error) {
 	filePath := filepath.Join(s.path, hash)

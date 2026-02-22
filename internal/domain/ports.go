@@ -18,6 +18,7 @@ type MediaStorage interface {
 	Save(hash string, data []byte) error
 	Delete(hash string) error
 	Read(hash string) ([]byte, error)
+	Path(hash string) string
 	Exists(hash string) (bool, error)
 }
 
