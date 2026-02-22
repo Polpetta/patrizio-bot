@@ -19,23 +19,11 @@ import (
 
 // Setup creates and configures the BotCli instance with lifecycle hooks.
 // The deps contains all injected dependencies (repository, storage, config).
-// The migrationsFS and migrationsDir are used to run database migrations on start.
-func Setup(deps *domain.Dependencies, migrationsFS fs.FS, migrationsDir string) *botcli.BotCli {
+func Setup(deps *domain.Dependencies) *botcli.BotCli {
 	cli := botcli.New("patrizio")
 
 	cli.OnBotInit(func(cli *botcli.BotCli, bot *deltachat.Bot, _ *cobra.Command, _ []string) {
 		bot.OnNewMsg(newMsgHandler(cli, bot, deps))
-	})
-
-	cli.OnBotStart(func(cli *botcli.BotCli, _ *deltachat.Bot, _ *cobra.Command, _ []string) {
-		db, err := InitDatabase(deps.Config, migrationsFS, migrationsDir)
-		if err != nil {
-			cli.Logger.Panicf("Failed to initialize database: %v", err)
-		}
-
-		// Database is successfully initialized and available via deps.FilterRepository
-		_ = db // Keep connection alive for the lifetime of the bot
-		cli.Logger.Info("Database initialized successfully")
 	})
 
 	return cli

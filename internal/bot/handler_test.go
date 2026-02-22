@@ -591,11 +591,19 @@ func TestHandleGroupMessage_TextFilterMatch(t *testing.T) {
 
 	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
 
-	if len(rpc.sentMessages) != 1 {
-		t.Fatalf("expected 1 sent message, got %d", len(rpc.sentMessages))
+	// Text responses now use SendMsg (with QuotedMessageId) instead of MiscSendTextMessage
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg call, got %d", len(rpc.sentMsgData))
 	}
-	if rpc.sentMessages[0].text != "I love puppies!" {
-		t.Errorf("expected 'I love puppies!', got %q", rpc.sentMessages[0].text)
+	sent := rpc.sentMsgData[0]
+	if sent.data.Text != "I love puppies!" {
+		t.Errorf("expected text 'I love puppies!', got %q", sent.data.Text)
+	}
+	if sent.data.QuotedMessageId != 1 {
+		t.Errorf("expected QuotedMessageId 1, got %d", sent.data.QuotedMessageId)
+	}
+	if sent.chatID != 100 {
+		t.Errorf("expected chatID 100, got %d", sent.chatID)
 	}
 }
 
@@ -685,6 +693,9 @@ func TestHandleGroupMessage_MediaFilterMatch(t *testing.T) {
 	}
 	if sent.data.ViewType != deltachat.MsgImage {
 		t.Errorf("expected ViewType %q, got %q", deltachat.MsgImage, sent.data.ViewType)
+	}
+	if sent.data.QuotedMessageId != 10 {
+		t.Errorf("expected QuotedMessageId 10, got %d", sent.data.QuotedMessageId)
 	}
 }
 

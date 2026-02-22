@@ -39,7 +39,7 @@ func main() {
 	deps := bot.BuildDependencies(cfg, db)
 
 	// Setup bot with dependencies
-	cli := bot.Setup(deps, migrations.FS, ".")
+	cli := bot.Setup(deps)
 
 	if err := cli.Start(); err != nil {
 		cli.Logger.Error(err)

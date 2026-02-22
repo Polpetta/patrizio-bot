@@ -129,15 +129,15 @@ func handleGroupMessage(
 	for _, filter := range filters {
 		switch filter.ResponseType {
 		case domain.ResponseTypeText:
-			// Send text response as a quote reply
-			_, err := rpc.MiscSendTextMessage(accID, msg.ChatId, filter.ResponseText)
+			// Send text response as a quote-reply to the triggering message
+			_, err := rpc.SendMsg(accID, msg.ChatId, deltachat.MsgData{
+				Text:            filter.ResponseText,
+				QuotedMessageId: msgID,
+			})
 			if err != nil {
 				logger.Errorf("Failed to send text response to chat %d: %v", msg.ChatId, err)
 				continue
 			}
-			// Set the message as a quote reply
-			// Note: Delta Chat RPC doesn't have direct quote API in MiscSendTextMessage,
-			// we'll need to use the quote field in message data if available
 
 		case domain.ResponseTypeMedia:
 			// Look up the media file path from storage
@@ -155,10 +155,11 @@ func handleGroupMessage(
 				continue
 			}
 
-			// Send the media message
+			// Send the media message as a quote-reply to the triggering message
 			_, err = rpc.SendMsg(accID, msg.ChatId, deltachat.MsgData{
-				File:     mediaPath,
-				ViewType: viewType,
+				File:            mediaPath,
+				ViewType:        viewType,
+				QuotedMessageId: msgID,
 			})
 			if err != nil {
 				logger.Errorf("Failed to send media response to chat %d: %v", msg.ChatId, err)
