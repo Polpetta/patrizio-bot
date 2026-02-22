@@ -19,9 +19,42 @@ import (
 
 const helpText = `Hi! I'm Patrizio, a group chat bot.
 
-Add me to a group and I'll respond to messages based on configured filters.
+Add me to a group and I'll respond to messages based on configured filters. Here's what I can do:
 
-I don't do much in direct messages — add me to a group to get started!`
+/filter <trigger> <response>
+  Create a filter. When a message contains the trigger word, I'll reply with the response text.
+  Examples:
+  /filter hello Hi there!
+  /filter "good morning" Rise and shine!
+
+/filter (<trigger1>, <trigger2>, ...) <response>
+  Create a filter with multiple triggers for the same response.
+  Example:
+  /filter (hi, hello, "good morning") Hey!
+
+/filter <trigger> react:<emoji>
+  Create a reaction filter. I'll react to the triggering message with the given emoji.
+  Example:
+  /filter lol react:😂
+
+/filter <trigger>
+  Create a media filter. Attach an image, sticker, GIF, or video to the command, or reply to a media message. I'll send that media when the trigger matches.
+  Example:
+  /filter cat (with an image attached)
+
+/stop <trigger>
+  Remove a single trigger.
+  Examples:
+  /stop hello
+  /stop "good morning"
+
+/stopall
+  Remove all filters from the current chat.
+
+/filters
+  List all active filters in the current chat.
+
+Triggers are matched as whole words anywhere in a message and are case-insensitive. I don't do much in direct messages — add me to a group to get started!`
 
 var errChatIDOverflow = errors.New("chat ID too large to convert")
 
