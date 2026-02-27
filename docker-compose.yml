@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    command: -f /data/ serve
     volumes:
       - ./data:/data:rw
     logging:
