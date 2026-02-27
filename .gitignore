@@ -48,3 +48,4 @@ Thumbs.db
 # Uncomment if you prefer not to track generated code:
 # internal/database/queries/
 /data/
+.opencode/
