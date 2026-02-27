@@ -1,8 +1,12 @@
-.PHONY: build run test lint docker-build migrate migrate-create sqlc clean
+.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean
 
 # Binary name
 BINARY_NAME=patrizio
 DOCKER_IMAGE=patrizio
+
+project-setup:
+	pre-commit install
+	pre-commit install --hook-type pre-push
 
 # Build the binary
 build:

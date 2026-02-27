@@ -2,16 +2,6 @@
 
 A Delta Chat bot for group chats, built with Go. Patrizio responds to messages based on configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram.
 
-## Prerequisites
-
-- **Go** 1.24+
-- **deltachat-rpc-server** — must be available in `PATH`. See [installation instructions](https://github.com/chatmail/core/tree/master/deltachat-rpc-server).
-- **Docker** (optional, for containerized deployment)
-- **golangci-lint** (for development)
-- **sqlc** (for regenerating query code)
-- **goose** (for creating new migrations)
-- **pre-commit** (for git hooks)
-
 ## Quick Start
 
 ### 1. Build
@@ -27,6 +17,8 @@ Configure the bot with a Delta Chat email account:
 ```sh
 ./patrizio init bot@example.com YOUR_PASSWORD
 ```
+
+Note: you can also setup an account on-the-fly via one of the hosted chat relays. Instead of the email address, you can put `DCACCOUNT:https://nine.testrun.org/new` instead.
 
 ### 3. Get the invite link
 
@@ -65,10 +57,8 @@ Build and run with Docker:
 
 ```sh
 make docker-build
-docker run -v patrizio-data:/data -e PATRIZIO_DB_PATH=/data/patrizio.db patrizio serve
+docker run -v patrizio-data:/data -e PATRIZIO_DB_PATH=/data/patrizio.db patrizio -f /data serve
 ```
-
-The Docker image uses `gcr.io/distroless/static-debian12` and runs as a non-root user.
 
 ## Development
 
@@ -85,6 +75,7 @@ pre-commit install --hook-type pre-push
 
 | Target | Description |
 |---|---|
+| `project-setup` | Setup project related hooks (doesn't install new software) |
 | `make build` | Compile the binary |
 | `make run` | Run the bot in serve mode |
 | `make test` | Run all tests |
@@ -97,7 +88,7 @@ pre-commit install --hook-type pre-push
 
 ### Database Migrations
 
-Migrations are forward-only (no down migrations). To create a new migration:
+Migrations can be created with:
 
 ```sh
 make migrate-create NAME=add_filters_table
@@ -120,6 +111,10 @@ make sqlc
 ```
 
 Generated code is written to `internal/database/queries/`.
+
+## AI disclamer
+
+As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI. This means, bootstrapping the project and adding the very first feature. I would never had enough time to learn all the Delta Chat RPC basics and to start the project. I understand someone might not be OK with it, but by using it and contributing, you accept this is the new reality of software development.
 
 ## License
 
