@@ -472,7 +472,9 @@ func handleMediaFilterCreation(
 	err = deps.FilterRepository.CreateMediaFilter(ctx, dbChatID, normalizedTriggers, mediaHash, mediaType)
 	if err != nil {
 		// Clean up the saved file
-		_ = deps.MediaStorage.Delete(mediaHash)
+		if nestedErr := deps.MediaStorage.Delete(mediaHash); nestedErr != nil {
+			logger.Errorf("Failed to delete media file %s after filter creation error: %v", mediaHash, nestedErr)
+		}
 		errMsg := fmt.Sprintf("❌ Failed to create media filter: %v", err)
 		sendErrorMessage(rpc, logger, accID, msg.ChatId, replyTo, errMsg)
 		return

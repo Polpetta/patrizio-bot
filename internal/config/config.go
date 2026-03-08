@@ -2,6 +2,8 @@
 package config
 
 import (
+	"errors"
+
 	"github.com/spf13/viper"
 )
 
@@ -55,7 +57,12 @@ func Load() (*Config, error) {
 	viper.AddConfigPath("/etc/patrizio/")
 
 	// Ignore error if config file not found — env vars and defaults still work
-	_ = viper.ReadInConfig()
+	if err := viper.ReadInConfig(); err != nil {
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if !errors.As(err, &configFileNotFoundError) {
+			return nil, err
+		}
+	}
 
 	return &Config{
 		dbPath:    viper.GetString(KeyDBPath),

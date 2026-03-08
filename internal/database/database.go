@@ -20,13 +20,17 @@ func Open(dbPath string) (*sql.DB, error) {
 
 	// Enable WAL mode for better concurrent read performance.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		_ = db.Close()
+		if nestedErr := db.Close(); nestedErr != nil {
+			return nil, fmt.Errorf("failed to set WAL mode: %w; also failed to close DB: %w", err, nestedErr)
+		}
 		return nil, fmt.Errorf("failed to set WAL mode: %w", err)
 	}
 
 	// Enable foreign key enforcement.
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		_ = db.Close()
+		if nestedErr := db.Close(); nestedErr != nil {
+			return nil, fmt.Errorf("failed to enable foreign keys: %w; also failed to close DB: %w", err, nestedErr)
+		}
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 

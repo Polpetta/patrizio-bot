@@ -40,7 +40,9 @@ func InitDatabase(cfg domain.Config, migrationsFS fs.FS, migrationsDir string) (
 	}
 
 	if err := database.Migrate(db, migrationsFS, migrationsDir); err != nil {
-		_ = db.Close()
+		if closingErr := db.Close(); closingErr != nil {
+			return nil, closingErr
+		}
 		return nil, err
 	}
 
