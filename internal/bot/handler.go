@@ -722,7 +722,7 @@ func handleFiltersCommand(
 			responseDesc = fmt.Sprintf("→ [%s]", filter.ResponseType)
 		}
 
-		sb.WriteString(fmt.Sprintf("• %s %s\n", triggerList, responseDesc))
+		fmt.Fprintf(&sb, "• %s %s\n", triggerList, responseDesc)
 	}
 
 	// Send the list
