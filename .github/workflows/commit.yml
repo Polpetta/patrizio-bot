@@ -6,6 +6,10 @@ on:
       - 'main'
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   go-checks:
     name: Golang related checks
@@ -18,8 +22,10 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Golangci-lint
-        run: golangci-lint run
+      - name: Golang-ci lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.10
 
       - name: Go build
         run: go build ./...
@@ -28,7 +34,7 @@ jobs:
         run: make test
 
   docker-build:
-    name: Build Docker image (no push)
+    name: Build Docker image
     runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU
