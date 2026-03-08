@@ -1,0 +1,42 @@
+name: Commit check
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+
+jobs:
+  go-checks:
+    name: Golang related checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        name: Clone repository
+      - uses: actions/setup-go@v4
+        name: Set up Go
+        with:
+          go-version: '1.25'
+
+      - name: Golangci-lint
+        run: golangci-lint run
+
+      - name: Go build
+        run: go build ./...
+
+      - name: Run tests
+        run: make test
+
+  docker-build:
+    name: Build Docker image (no push)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: false
+          tags: user/app:latest
