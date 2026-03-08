@@ -1,6 +1,12 @@
+<div align="center">
+
+![logo](docs/img/logo.webp)
+
 # Patrizio
 
-A Delta Chat bot for group chats, built with Go. Patrizio responds to messages based on configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram.
+</div>
+
+A [Delta Chat](https://delta.chat/) bot for group chats, built with Go. Patrizio responds to messages based on configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram.
 
 ## Quick Start
 
