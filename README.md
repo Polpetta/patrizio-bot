@@ -88,11 +88,14 @@ sudo chown -R 65532:65532 ./data # 65532 is the UID of the image.
 ```
 
 Once setup, you have to populate the folder properly, which you can do with:
+
 ```
 make docker-build
 docker run --rm -v ./data:/data patrizio -f /data init
 docker run --rm -v ./data:/data patrizio -f /data link
 ```
+
+Then you can run it with:
 
 ```sh
 docker compose up --build -d
