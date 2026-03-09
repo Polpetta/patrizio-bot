@@ -6,7 +6,15 @@
 
 </div>
 
-A [Delta Chat](https://delta.chat/) bot for group chats, built with Go. Patrizio responds to messages based on configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram.
+A [Delta Chat](https://delta.chat/) bot for group chats, built with Go. Patrizio responds to messages based on
+configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram. Its main aim is to be used in
+friend groups or with people known. Differently from Miss Rose, it does not serve as a bot moderator, since Delta Chat
+groups have no admin/member structure.
+
+## Why Patrizio?
+
+While it is not properly the penguin in the image, it comes from a funny Internet meme which was trending some time ago.
+Since I am always out of ideas for good names, I thought it was a good pick. After all, who does not like penguins?
 
 ## Quick Start
 
@@ -24,8 +32,6 @@ Configure the bot with a Delta Chat email account:
 ./patrizio init bot@example.com YOUR_PASSWORD
 ```
 
-Note: you can also setup an account on-the-fly via one of the hosted chat relays. Instead of the email address, you can put `DCACCOUNT:https://nine.testrun.org/new` instead.
-
 ### 3. Get the invite link
 
 Share this link so users can contact the bot:
@@ -40,7 +46,8 @@ Share this link so users can contact the bot:
 ./patrizio serve
 ```
 
-The bot will connect to Delta Chat and start processing messages. Add it to a group to use keyword filters, or send it a direct message to get help text.
+The bot will connect to Delta Chat and start processing messages. Add it to a group to use keyword filters, or send it a
+direct message to get help text.
 
 ## Configuration
 
@@ -51,30 +58,58 @@ Configuration is done via environment variables prefixed with `PATRIZIO_`:
 | `PATRIZIO_DB_PATH` | `./patrizio.db` | Path to the SQLite database file |
 | `PATRIZIO_LOG_LEVEL` | `info` | Log level |
 
-The bot's Delta Chat account data is stored in a platform-specific config directory (e.g. `~/.config/patrizio/` on Linux), overridable with `--folder`:
+The bot's Delta Chat account data is stored in a platform-specific config directory (e.g. `~/.config/patrizio/` on
+Linux), overridable with `--folder`:
 
 ```sh
-./patrizio --folder /custom/path serve
+./patrizio --folder /custom/path serve # --folder is optional, config will be saved in your user home otherwise
 ```
 
 ## Docker
 
-Build and run with Docker:
+Build and run with Docker (this assumes you've already initialized your bot instance):
 
 ```sh
 make docker-build
-docker run -v patrizio-data:/data -e PATRIZIO_DB_PATH=/data/patrizio.db patrizio -f /data serve
+docker run -v patrizio-data:/data patrizio -f /data serve
 ```
+
+### Docker compose
+
+If you prefer an orchestrated solution, you can use the included Docker Compose, which will build the image from the
+source and serve it as it is. This is particularly useful if you do not want to rely on the provided Docker images, or if
+you want to apply local edits. Before proceeding folder, a `./data` folder is mandatory in order for this setup to work
+properly. It is also necessary to give the right permissions to the folder, so that the non-root user in the container
+has access to it:
+
+```sh
+mkdir -p ./data/{media,db}
+sudo chown -R 65532:65532 ./data # 65532 is the UID of the image.
+```
+
+Once setup, you have to populate the folder properly, which you can do with:
+```
+make docker-build
+docker run --rm -v ./data:/data patrizio -f /data init
+docker run --rm -v ./data:/data patrizio -f /data link
+```
+
+```sh
+docker compose up --build -d
+```
+
+> [!NOTE]
+> The included Docker Compose has a built-in log rotation (up to 10MB)
 
 ## Development
 
 ### Setup
 
-Install pre-commit hooks:
+A Make directive is available for a quick project setup. Note that this will not install any dependencies, i.e. Golang,
+Golint-ci and Pre-commit.
 
 ```sh
-pre-commit install
-pre-commit install --hook-type pre-push
+make project-setup
 ```
 
 ### Makefile Targets
@@ -120,7 +155,11 @@ Generated code is written to `internal/database/queries/`.
 
 ## AI disclamer
 
-As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI. This means, bootstrapping the project and adding the very first feature. I would never had enough time to learn all the Delta Chat RPC basics and to start the project. I understand someone might not be OK with it, but by using it and contributing, you accept this is the new reality of software development.
+As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI (Claude, in
+particular). This means, bootstrapping the project and adding the very first feature. I would never had enough time to
+learn all the Delta Chat RPC basics and to start the project. I understand someone might not be OK with it, but by using
+it and contributing, you accept this face. Other AI assistance tools will be used during the development, in particular
+with the aim to explore and learn bot Delta Chat RPC and AI tools.
 
 ## License
 
