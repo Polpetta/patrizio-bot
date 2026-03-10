@@ -4,7 +4,7 @@
 BINARY_NAME=patrizio
 DOCKER_IMAGE=patrizio
 
-project-setup:
+project-setup: doc-setup
 	pre-commit install
 	pre-commit install --hook-type pre-push
 
@@ -41,6 +41,22 @@ migrate-create:
 # Regenerate Go code from SQL query files
 sqlc:
 	sqlc generate
+
+# FIXME this doesn't work (source), needs to be fixed
+doc-activate-venv:
+	source ./.venv/bin/activate
+
+# FIXME this doesn't work (source), needs to be fixed
+doc-setup:
+	python3 -m venv .venv
+	source ./.venv/bin/activate
+	pip3 install zensical
+
+doc-build: doc-activate-venv
+	zensical build
+
+doc-local: doc-activate-venv
+	zensical serve
 
 # Remove build artifacts
 clean:

@@ -6,6 +6,8 @@
 
 </div>
 
+<!-- FIXME: add a link to the documentation gh page? -->
+
 A [Delta Chat](https://delta.chat/) bot for group chats, built with Go. Patrizio responds to messages based on
 configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram. Its main aim is to be used in
 friend groups or with people known. Differently from Miss Rose, it does not serve as a bot moderator, since Delta Chat
@@ -116,6 +118,8 @@ make project-setup
 ```
 
 ### Makefile Targets
+
+<!-- FIXME: update table with new Make commands -->
 
 | Target | Description |
 |---|---|
