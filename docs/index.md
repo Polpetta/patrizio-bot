@@ -26,4 +26,3 @@ all the available commands and how to use them!
     errors. Sometimes, this are not easy to spot. If happen to find one and it has not been reported yet, feel free to
     open an issue in [Patrizio's issue tracker](https://github.com/Polpetta/patrizio-bot/issues). Every small
     contribution is wellcome!
-

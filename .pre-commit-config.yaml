@@ -45,3 +45,20 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+
+  # Markdown lint check with exclusions
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        name: Markdown lint
+        entry: markdownlint
+        args: [--config, .markdownlint.json]
+        language: node
+        types: [markdown]
+        exclude: |
+            (?x)^(
+                AGENTS\.md$|
+                docs/old\.md$|
+                openspec/.*
+            )$
