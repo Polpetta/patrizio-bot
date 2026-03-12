@@ -51,6 +51,7 @@ repos:
     rev: v0.38.0
     hooks:
       - id: markdownlint
+        stages: [pre-commit]
         name: Markdown lint
         entry: markdownlint
         args: [--config, .markdownlint.json]
