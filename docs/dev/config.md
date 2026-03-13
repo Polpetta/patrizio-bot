@@ -1,3 +1,7 @@
+---
+icon: lucide/file-sliders
+---
+
 # Configuration
 
 Patrizio loads configuration from three sources in this precedence order:
@@ -7,7 +11,7 @@ Patrizio loads configuration from three sources in this precedence order:
 current directory or `/etc/patrizio/` to persist settings.
 3. **Default values** – set in the application when no file or env var is provided.
 
-The following table lists configuration keys, types, and defaults.
+The following table lists configuration keys, types, and defaults:
 
 | Key          | Type   | Default                | Description |
 |---------------|--------|-----------------------|---------------|
@@ -32,6 +36,8 @@ log_level = "debug"
 media_path = "/var/lib/patrizio/media"
 ```
 
+Note that this file can be found in the root repository of the project as well.
+
 ## Environment Variable Overrides
 
 Each key can be overridden by an environment variable prefixed with `PATRIZIO_`. Examples:
@@ -43,49 +49,3 @@ export PATRIZIO_MEDIA_PATH="/tmp/media"
 ```
 
 Environment variables take precedence over values in the TOML file.
-
-## Search Paths for the TOML File
-
-The configuration loader looks for `patrizio.toml` in these directories (in order):
-
-1. Current working directory (`.`)
-2. `/etc/patrizio/`
-
-If no file is found, the application uses default values instead.
-
-## Consuming the Configuration
-
-The `Load` function in `internal/config/config.go` returns a `Config` instance.
-
-Example usage in `cmd/patrizio/main.go`:
-
-```go
-cfg, err := config.Load()
-if err != nil {
-    log.Fatalf("failed to load config: %v", err)
-}
-
-// Use the configuration
-log.Infof("using media path %s", cfg.MediaPath())
-```
-
-The configuration values are used throughout the application.
-
-For example, `cfg.MediaPath()` determines where media files are served from.
-
-## Quick-start Snippet
-
-```bash
-# Create a custom configuration file
-cat > patrizio.toml <<EOF
-# patrizio.toml
-log_level = "debug"
-EOF
-
-# Run the bot with the custom config
-./patrizio
-```
-
-## Reference
-
-See the source code: [internal/config/config.go](../internal/config/config.go).

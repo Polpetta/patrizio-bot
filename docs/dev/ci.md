@@ -1,107 +1,33 @@
+---
+icon: lucide/workflow
+---
+
 # CI/CD Pipeline
 
 Patrizio uses GitHub Actions for continuous integration and deployment.
 
-## Workflow Overview
+## Workflow files
 
-| Step | Description |
-|------|-------------|
-| `Lint` | Run `markdownlint` and `golangci-lint`.
-| `Test` | Execute Go tests.
-| `Build` | Compile the binary for Linux and macOS.
-| `Release` | Create a GitHub release if a tag is pushed.
+| Step     | Description                                                                                     |
+|----------|-------------------------------------------------------------------------------------------------|
+| `Commit` | Runs `markdownlint` and `golangci-lint`. Ensures tests pass.                                    |
+| `Docker` | Builds the docker image and pushes it in the Github Container Registry (GHCR) of the project    |
+| `Docs`   | Publishes the project webiste upon a new commit landing in `main` or when a new release happens |
 
-## YAML Configuration
+For more details about the implementations, see the `.github/workflows/` folder in the repository.
 
-The workflow is defined in `.github/workflows/ci.yml`:
+## Pre-commit
 
-```yaml
-name: CI
+An additional tool that is used by the project is `pre-commit`. It allows to enforce some standardization across the
+codebase, especially regarding linting and formatting. It alsos enforce test run at push time. This is particularly
+useful when pushing directly into the `main` branch. Also, when using AI assistance, `pre-commit` act as guardrail
+ensuring the codebase written already meets a lower bar before human review. Finally, tests upon committing force the AI
+to actually have a look at them before pushing.
 
-on:
-  push:
-    branches: [main]
-    tags: ["v*.*.*"]
-  pull_request:
-    branches: [main]
+!!! note
+    Note that AI can still get around these checks. Nothing stops them from using the good old `git push --no-verify`.
 
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Install golangci-lint
-        run: |
-      curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh |
-      sh -s -- -b $(go env GOPATH)/bin v1.58.0
-      - name: Run golangci-lint
-        run: golangci-lint run ./...
-      - name: Install markdownlint
-        run: npm install -g markdownlint-cli
-      - name: Run markdownlint
-        run: markdownlint docs/**/*.md
+## The logic behind these steps
 
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Run tests
-        run: go test ./...
-
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Build binary
-        run: go build -o patrizio ./cmd/patrizio
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: patrizio-${{ matrix.os }}
-          path: patrizio
-
-  release:
-    runs-on: ubuntu-latest
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: patrizio-ubuntu-latest
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: patrizio
-          prerelease: false
-```
-
-## Secrets
-
-* `GH_TOKEN` – used by the release job to publish to GitHub.
-
-> The workflow assumes a **release** branch is protected and only merged after all checks pass.
-
-For more details, see the `ci.yml` file in the repository.
+The idea of CI/CD steps together with Pre-commit checks is to ensure that the project stays stable. Finally, other
+automations are planning regarding automatic Changelogs and releases.

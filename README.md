@@ -1,6 +1,6 @@
 <div align="center">
 
-![logo](docs/img/logo.webp)
+![logo](docs/img/logo-circle.webp)
 
 # Patrizio
 
@@ -55,10 +55,10 @@ direct message to get help text.
 
 Configuration is done via environment variables prefixed with `PATRIZIO_`:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PATRIZIO_DB_PATH` | `./patrizio.db` | Path to the SQLite database file |
-| `PATRIZIO_LOG_LEVEL` | `info` | Log level |
+| Variable             | Default         | Description                      |
+|----------------------|-----------------|----------------------------------|
+| `PATRIZIO_DB_PATH`   | `./patrizio.db` | Path to the SQLite database file |
+| `PATRIZIO_LOG_LEVEL` | `info`          | Log level                        |
 
 The bot's Delta Chat account data is stored in a platform-specific config directory (e.g. `~/.config/patrizio/` on
 Linux), overridable with `--folder`:
@@ -91,7 +91,7 @@ sudo chown -R 65532:65532 ./data # 65532 is the UID of the image.
 
 Once setup, you have to populate the folder properly, which you can do with:
 
-```
+```sh
 make docker-build
 docker run --rm -v ./data:/data patrizio -f /data init
 docker run --rm -v ./data:/data patrizio -f /data link

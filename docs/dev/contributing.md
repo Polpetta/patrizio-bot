@@ -1,11 +1,17 @@
+---
+icon: lucide/git-pull-request-create
+---
+
 # Contributing to Patrizio Bot
 
 ## Branching Strategy
 
-We use a simple feature-branch workflow based on Git Flow concepts. The main
-branch holds production code. Feature branches merge back into it.
+We use a simple feature-branch workflow based on Git Flow concepts. The `main` branch holds production code. Feature
+branches merge back into it. If you want to try your work, for each commit a Docker image will be generated
 
 ### Example
+
+Thereby you can find an example of development workflow, altough you maybe already accostumed to it:
 
 ```bash
 # Start from main
@@ -31,35 +37,31 @@ When the feature is complete, open a PR against **main** and let the CI run.
 
   ```bash
   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-  golangci-lint run ./...
+  make lint
   ```
 
 - **Markdown** – `markdownlint` enforces style. Run with:
 
   ```bash
-  npx markdownlint docs/**/*.md
+  pre-commit run markdownlint --run-all-files
   ```
-
-- **Formatting** – Run `gofmt -w .` before committing.
 
 ## Testing
 
-- Run all unit tests:
+- Run all the tests:
 
   ```bash
-  go test ./...
+  make test
   ```
-
-The repository contains test data in `internal/testdata`. No external services are required.
 
 ## Running Locally
 
 ```bash
 # Build the bot
-go build -o patrizio ./cmd/patrizio
+make build
 
 # Create required directories
-mkdir -p data/media data/db
+mkdir -p ./data/{media,db}
 
 # Copy default config
 cp patrizio.toml config.toml
@@ -70,10 +72,17 @@ cp patrizio.toml config.toml
 
 ## Pull-Request Guidelines
 
+When opening up contributions, please:
+
 1. Keep changes focused to a single feature or bug fix.
 2. Include tests for new behaviour.
-3. Run CI locally (`act` or `git push`).
+3. Run pre-commit checks locally. They will take care of covering most if not all the checks that are then run in the CI
 4. Provide a clear description and any relevant issue references.
 5. Ensure all lint checks pass.
+
+!!! note "About AI"
+    If you have vibe-coded or you have committed through the use of AI agentic coding (aka Claude Code,
+    OpenCode and similar) please disclose it in the PR. This is not a problem per se, but it is fair to let know other
+    people about that, so that they can decide whenever they want to use AI assisted software or not.
 
 Happy hacking!

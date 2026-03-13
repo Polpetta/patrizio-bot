@@ -54,7 +54,7 @@ repos:
         stages: [pre-commit]
         name: Markdown lint
         entry: markdownlint
-        args: [--config, .markdownlint.json]
+        args: [--fix, --config, .markdownlint.json]
         language: node
         types: [markdown]
         exclude: |

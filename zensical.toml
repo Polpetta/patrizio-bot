@@ -34,7 +34,7 @@ site_url = "https://polpetta.github.io/patrizio-bot/"
 #
 # Read more: https://zensical.org/docs/setup/basics/#copyright
 copyright = """
-Copyright &copy; 2026 Davide Polonio & Collaborators
+Copyright &copy; 2026 Davide Polonio
 """
 
 repo_url = "https://github.com/Polpetta/patrizio-bot"
@@ -47,9 +47,18 @@ repo_url = "https://github.com/Polpetta/patrizio-bot"
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
    { "Home" = "index.md" },
-   { "Usage" = "usage.md" },
+   { "User guide" = [
+     "user/index.md",
+     { "Filters" = "user/filters.md" }
+   ]},
    { "Developer Guide" = [
      "dev/index.md",
+     { "Architecture" = "dev/architecture.md" },
+     { "Continuous Integration" = "dev/ci.md" },
+     { "Commands" = "dev/commands.md" },
+     { "Config" = "dev/config.md" },
+     { "Contributing" = "dev/contributing.md" },
+     { "Storage" = "dev/storage.md" },
    ]},
 ]
 
@@ -75,7 +84,7 @@ nav = [
 # Section for configuring theme options
 # ----------------------------------------------------------------------------
 [project.theme]
-logo = "img/logo.webp"
+logo = "img/logo-circle.webp"
 
 # change this to "classic" to use the traditional Material for MkDocs look.
 #variant = "classic"
@@ -251,8 +260,6 @@ features = [
     # always rendered as part of the navigation sidebar on the left.
     # https://zensical.org/docs/setup/navigation/#navigation-integration
     #"toc.integrate",
-
-    "search.highlight",
 ]
 
 # ----------------------------------------------------------------------------

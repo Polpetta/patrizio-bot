@@ -1,5 +1,7 @@
 .PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean
 
+SHELL := /bin/bash
+
 # Binary name
 BINARY_NAME=patrizio
 DOCKER_IMAGE=patrizio
@@ -42,11 +44,9 @@ migrate-create:
 sqlc:
 	sqlc generate
 
-# FIXME this doesn't work (source), needs to be fixed
 doc-activate-venv:
 	source ./.venv/bin/activate
 
-# FIXME this doesn't work (source), needs to be fixed
 doc-setup:
 	python3 -m venv .venv
 	source ./.venv/bin/activate
@@ -56,7 +56,7 @@ doc-build: doc-activate-venv
 	zensical build
 
 doc-local: doc-activate-venv
-	zensical serve
+	./.venv/bin/zensical serve
 
 # Remove build artifacts
 clean:
