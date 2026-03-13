@@ -11,6 +11,6 @@ page for the latest release.
 
 - First version
 - Add filters functionality
-- Create project webiste
+- Create project website
 
 <!-- From here below we'll list all the older versions -->

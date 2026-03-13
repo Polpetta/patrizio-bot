@@ -7,8 +7,8 @@ icon: lucide/layers-2
 Patrizio is a lightweight Delta Chat bot written in pure Go (1.25+). The code is
 split into logical layers, each with a single responsibility. The whole
 application tries to follow the Hexagonal architecture, having ports and
-adapters, to keep elements isolated. We're also trying to avoid having function
-with side effect, pushing towards pure function calls.
+adapters, to keep elements isolated. We're also trying to avoid having functions
+with side effects, pushing towards pure function calls.
 
 ## Flow Diagram
 
@@ -33,7 +33,7 @@ The deltabot‑cli‑go framework powers the bot.  `internal/bot/bot.go` registe
 * **OnBotInit** – called once when the bot starts.  It’s mainly a hook for future extensions.
 * **OnNewMsg** – invoked for every message received.  This is where the bot does its work.
 
-The `handler.go` plays a central role into parsing the incoming message and then calling the right handler, that will
+The `handler.go` plays a central role in parsing the incoming message and then calling the right handler, that will
 process the message accordingly. Once the message has been processed, Delta Chat RPC is invoked to reply to the user
 accordingly.
 

@@ -5,7 +5,7 @@ icon: lucide/list-filter
 # Usage
 
 Filters are a powerful functionality to add a custom reply, send media or react to messages that contain certain text.
-This is the fist feature of the bot, and it took inspiration directly from [Miss Rose](https://missrose.org/) Telegram
+This is the first feature of the bot, and it took inspiration directly from [Miss Rose](https://missrose.org/) Telegram
 bot.
 
 ## Commands
@@ -35,7 +35,7 @@ Example:
 
 - `/filter lol react:😂`
 
-### `/filter trigger` - Creating a based filter
+### `/filter trigger` - Creating a media filter
 
 Create a media filter. Attach an image, sticker, GIF, or video to the command,
 or reply to a media message. Patrizio will send that media when the trigger matches.
