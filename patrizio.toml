@@ -1,0 +1,10 @@
+# Sample configuration for Patrizio
+
+# Override default database path
+#db_path = "/data/db/patrizio.db"
+
+# Logging level
+log_level = "debug"
+
+# Media storage directory
+media_path = "/data/media"
