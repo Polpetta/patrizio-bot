@@ -1,9 +1,16 @@
+---
+icon: lucide/scroll-text
+---
+
 # Changelog
 
-This project follows semantic versioning. See the GitHub releases page for detailed notes:
+This project follows semantic versioning. See the [GitHub releases](https://github.com/Polpetta/patrizio-bot/releases)
+page for the latest release.
 
-- **[Release v0.1.0](https://github.com/your-org/patrizio-bot/releases/tag/v0.1.0)** – Initial release with basic filtering.
-- **[Release v0.2.0](https://github.com/your-org/patrizio-bot/releases/tag/v0.2.0)** – Added media filters and CI pipeline.
-- **[Release v0.3.0](https://github.com/your-org/patrizio-bot/releases/tag/v0.3.0)** – Improved command parsing and documentation.
+## Upcoming changes
 
-For the full changelog, see the release notes on GitHub.
+- First version
+- Add filters functionality
+- Create project webiste
+
+<!-- From here below we'll list all the older versions -->

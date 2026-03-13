@@ -60,6 +60,7 @@ nav = [
      { "Contributing" = "dev/contributing.md" },
      { "Storage" = "dev/storage.md" },
    ]},
+   { "Changelog" = "changelog.md" }
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
