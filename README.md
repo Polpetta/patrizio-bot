@@ -6,8 +6,6 @@
 
 </div>
 
-<!-- FIXME: add a link to the documentation gh page? -->
-
 A [Delta Chat](https://delta.chat/) bot for group chats, built with Go. Patrizio responds to messages based on
 configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram. Its main aim is to be used in
 friend groups or with people known. Differently from Miss Rose, it does not serve as a bot moderator, since Delta Chat
@@ -170,6 +168,11 @@ particular). This means, bootstrapping the project and adding the very first fea
 learn all the Delta Chat RPC basics and to start the project. I understand someone might not be OK with it, but by using
 it and contributing, you accept this face. Other AI assistance tools will be used during the development, in particular
 with the aim to explore and learn bot Delta Chat RPC and AI tools.
+
+## More?
+
+You've made 'till here and want to read more? Head over the [project webiste](https://polpetta.github.io/patrizio-bot)
+for more!
 
 ## License
 

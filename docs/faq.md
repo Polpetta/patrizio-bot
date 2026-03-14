@@ -1,3 +1,7 @@
+---
+icon: lucide/circle-question-mark
+---
+
 # FAQ – Frequently Asked Questions
 
 ## Why does my filter not trigger?
@@ -8,44 +12,21 @@
   /filter (hi, hello, "good morning") Hey!
   ```
 
-Case-insensitive matching. Make sure you're not using a different character set.
+!!! note
+    Patrizio uses case-insensitive matching. Finally, make sure you're not using a different character set!
 
-## How do I handle large media files?
-
-The bot streams media from Delta Chat. Files larger than the configured
-limit (default 5 MB) are rejected. Adjust the limit in `patrizio.toml`:
-
-```yaml
-media:
-  max_size_bytes: 10485760  # 10 MiB
-```
+More can be found in its [filter usage guide](user/filters.md)
 
 ## What if I want to add a new command?
 
-All commands live in `internal/domain/command.go`.
-
-Add a new entry to the `commands` map, implement logic in `handler.go`,
-and write unit tests in the `*_test.go` files.
-
-## Where can I find the architecture diagram?
-
-See `docs/dev/architecture.md`. A Mermaid diagram is embedded below:
-
-```mermaid
-graph TD
-  A[Delta Chat] -->|RPC| B[BotCLI]
-  B --> C[handler.go]
-  C --> D[domain logic]
-  D --> E[repository]
-  E --> F[SQLite DB]
-```
+Please refer to the [Developer documentation](dev/index.md) for further information about Patrizio's architecture.
 
 ## How to run tests locally?
 
-```bash
-go test ./...
-```
+Please refer to the [project README](https://github.com/Polpetta/patrizio-bot/blob/main/README.md) for further
+information.
 
-## Who maintains the project?
+## Is there a public instance?
 
-Patrizio is maintained by a small community. If you'd like to contribute, see the [CONTRIBUTING](dev/contributing.md) guide.
+Not yet, due to data being saved in plain without any security. I'll think about a public instance once some sort of
+privacy measure has been taken in that sense
