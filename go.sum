@@ -1,5 +1,7 @@
 github.com/chatmail/rpc-client-go v1.2.15-0.20260215043703-c87f0dc641be h1:+5HFRV4oaC2tPDLOaaxSTjfpaT7m/oL2MXblAcEoaV0=
 github.com/chatmail/rpc-client-go v1.2.15-0.20260215043703-c87f0dc641be/go.mod h1:bBX+syYUeyuaGd5VQCjTtbj9q4V29xnHPjkBr6rzG2A=
+github.com/chatmail/rpc-client-go v1.2.42 h1:R/W93QU1vbkHwhDheUHw8BJFbqt8KOC14O5mIRYtvvM=
+github.com/chatmail/rpc-client-go v1.2.42/go.mod h1:bBX+syYUeyuaGd5VQCjTtbj9q4V29xnHPjkBr6rzG2A=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/creachadair/jrpc2 v1.1.2 h1:UOYMipEFYlwd5qmcvs9GZBurn3oXt1UDIX5JLjWWFzo=
 github.com/creachadair/jrpc2 v1.1.2/go.mod h1:JcCe2Eny3lIvVwZLm92WXyU+tNUgTBWFCLMsfNkjEGk=
@@ -9,6 +11,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deltachat-bot/deltabot-cli-go v1.2.14 h1:KuYLT1bdqLj/wCCrsG6QkF39Q9Y9a9sjJV4mSJWB3mA=
 github.com/deltachat-bot/deltabot-cli-go v1.2.14/go.mod h1:sO6EX35DIEdwPdIwXrUWvYl4fCmX8Xm7myjQiey2CXE=
+github.com/deltachat-bot/deltabot-cli-go v1.2.42 h1:KaEkCP1XeIem2HuBe/oPWpGD49BKinnQM/XqY7mgN0A=
+github.com/deltachat-bot/deltabot-cli-go v1.2.42/go.mod h1:j76uazo7X2OAi7RYg3d8wMR5JrlPAtZs798bGNIKwoU=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/fortytw2/leaktest v1.3.0 h1:u8491cBMTQ8ft8aeV+adlcytMZylmA5nnwwkRZjI8vw=
