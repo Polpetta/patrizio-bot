@@ -9,7 +9,7 @@ require (
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.21.0
-	modernc.org/sqlite v1.45.0
+	modernc.org/sqlite v1.46.1
 )
 
 require (
