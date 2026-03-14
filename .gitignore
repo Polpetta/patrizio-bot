@@ -49,3 +49,5 @@ Thumbs.db
 # internal/database/queries/
 /data/
 .opencode/
+/site/
+.claude/

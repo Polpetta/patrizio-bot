@@ -1,6 +1,6 @@
 <div align="center">
 
-![logo](docs/img/logo.webp)
+![logo](docs/img/logo-circle.webp)
 
 # Patrizio
 
@@ -53,10 +53,11 @@ direct message to get help text.
 
 Configuration is done via environment variables prefixed with `PATRIZIO_`:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PATRIZIO_DB_PATH` | `./patrizio.db` | Path to the SQLite database file |
-| `PATRIZIO_LOG_LEVEL` | `info` | Log level |
+| Variable              | Default         | Description                             |
+|-----------------------|-----------------|-----------------------------------------|
+| `PATRIZIO_DB_PATH`    | `./patrizio.db` | Path to the SQLite database file        |
+| `PATRIZIO_MEDIA_PATH` | `./media`       | Directory where media files are stored  |
+| `PATRIZIO_LOG_LEVEL`  | `info`          | Log level                               |
 
 The bot's Delta Chat account data is stored in a platform-specific config directory (e.g. `~/.config/patrizio/` on
 Linux), overridable with `--folder`:
@@ -89,7 +90,7 @@ sudo chown -R 65532:65532 ./data # 65532 is the UID of the image.
 
 Once setup, you have to populate the folder properly, which you can do with:
 
-```
+```sh
 make docker-build
 docker run --rm -v ./data:/data patrizio -f /data init
 docker run --rm -v ./data:/data patrizio -f /data link
@@ -117,18 +118,21 @@ make project-setup
 
 ### Makefile Targets
 
-| Target | Description |
-|---|---|
-| `project-setup` | Setup project related hooks (doesn't install new software) |
-| `make build` | Compile the binary |
-| `make run` | Run the bot in serve mode |
-| `make test` | Run all tests |
-| `make lint` | Run golangci-lint |
-| `make docker-build` | Build the Docker image |
-| `make migrate` | Run pending database migrations |
-| `make migrate-create NAME=<name>` | Create a new migration file |
-| `make sqlc` | Regenerate Go code from SQL query files |
-| `make clean` | Remove build artifacts |
+| Target                            | Description                                                       |
+|-----------------------------------|-------------------------------------------------------------------|
+| `make project-setup`              | Setup project related hooks (doesn't install new software)        |
+| `make build`                      | Compile the binary                                                |
+| `make run`                        | Run the bot in serve mode                                         |
+| `make test`                       | Run all tests                                                     |
+| `make lint`                       | Run golangci-lint                                                 |
+| `make docker-build`               | Build the Docker image                                            |
+| `make migrate`                    | Run pending database migrations                                   |
+| `make migrate-create NAME=<name>` | Create a new migration file                                       |
+| `make sqlc`                       | Regenerate Go code from SQL query files                           |
+| `make doc-setup`                  | Command to only setup documentation (included in `project setup`) |
+| `make doc-build`                  | Builds the documentation and output in `site` directory           |
+| `make doc-local`                  | Serves the documentation locally, at `localhost:8000`             |
+| `make clean`                      | Remove build artifacts                                            |
 
 ### Database Migrations
 
@@ -158,11 +162,17 @@ Generated code is written to `internal/database/queries/`.
 
 ## AI disclamer
 
-As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI (Claude, in
-particular). This means, bootstrapping the project and adding the very first feature. I would never had enough time to
-learn all the Delta Chat RPC basics and to start the project. I understand someone might not be OK with it, but by using
-it and contributing, you accept this face. Other AI assistance tools will be used during the development, in particular
-with the aim to explore and learn bot Delta Chat RPC and AI tools.
+As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI (Claude CLI, in
+particular since I try to stick to local models hosted via Ollama as much as possible). This means, bootstrapping the
+project and adding the very first feature. I would never had enough time to learn all the Delta Chat RPC basics and to
+start the project. I understand someone might not be OK with it, but by using it and contributing, you accept this face.
+Other AI assistance tools will be used during the development, in particular with the aim to explore and learn bot Delta
+Chat RPC and AI tools.
+
+## More?
+
+You've made 'till here and want to read more? Head over the [project webiste](https://polpetta.github.io/patrizio-bot)
+for more!
 
 ## License
 

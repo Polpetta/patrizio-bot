@@ -1,10 +1,12 @@
-.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean
+.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean doc-activate-venv doc-setup doc-build doc-local
+
+SHELL := /bin/bash
 
 # Binary name
 BINARY_NAME=patrizio
 DOCKER_IMAGE=patrizio
 
-project-setup:
+project-setup: doc-setup
 	pre-commit install
 	pre-commit install --hook-type pre-push
 
@@ -41,6 +43,16 @@ migrate-create:
 # Regenerate Go code from SQL query files
 sqlc:
 	sqlc generate
+
+doc-setup:
+	python3 -m venv .venv
+	source ./.venv/bin/activate && pip3 install zensical==0.0.27
+
+doc-build:
+	source ./.venv/bin/activate && zensical build
+
+doc-local:
+	source ./.venv/bin/activate && zensical serve
 
 # Remove build artifacts
 clean:
