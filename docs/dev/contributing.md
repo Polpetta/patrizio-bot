@@ -11,7 +11,7 @@ branches merge back into it. If you want to try your work, for each commit a Doc
 
 ### Example
 
-Thereby you can find an example of development workflow, altough you maybe already accustomed to it:
+Thereby you can find an example of development workflow, although you maybe already accustomed to it:
 
 ```bash
 # Start from main
