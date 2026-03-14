@@ -48,4 +48,4 @@ go test ./...
 
 ## Who maintains the project?
 
-Patrizio is maintained by a small community. If you'd like to contribute, see the [CONTRIBUTING](CONTRIBUTING.md) guide.
+Patrizio is maintained by a small community. If you'd like to contribute, see the [CONTRIBUTING](dev/contributing.md) guide.

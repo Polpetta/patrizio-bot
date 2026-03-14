@@ -1,4 +1,4 @@
-.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean
+.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean doc-activate-venv doc-setup doc-build doc-local
 
 SHELL := /bin/bash
 

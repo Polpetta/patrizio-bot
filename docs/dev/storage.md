@@ -8,7 +8,7 @@ icon: lucide/database
 
     Currently, all the data stored is in **plain**. This means no encryption is done on the content sent by the users.
     While this is fine as long as you deploy the bot only for your personal groups, it can have unwanted implications
-    if it is sharedy pubicly.
+    if it is shared publicly.
 
 Patrizio keeps two kinds of data:
 

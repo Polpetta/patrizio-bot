@@ -11,7 +11,7 @@ Patrizio uses GitHub Actions for continuous integration and deployment.
 | Step     | Description                                                                                     |
 |----------|-------------------------------------------------------------------------------------------------|
 | `Commit` | Runs `markdownlint` and `golangci-lint`. Ensures tests pass.                                    |
-| `Docker` | Builds the docker image and pushes it in the Github Container Registry (GHCR) of the project    |
+| `Docker` | Builds the docker image and pushes it in the GitHub Container Registry (GHCR) of the project    |
 | `Docs`   | Publishes the project website upon a new commit landing in `main` or when a new release happens |
 
 For more details about the implementations, see the `.github/workflows/` folder in the repository.
@@ -29,5 +29,5 @@ to actually have a look at them before pushing.
 
 ## The logic behind these steps
 
-The idea of CI/CD steps together with Pre-commit checks is to ensure that the project stays stable. Finally, other
-automations are planning regarding automatic Changelogs and releases.
+The idea of CI/CD steps together with Pre-commit checks is to ensure that the project stays stable. Finally, further
+automation is planned for automatic changelogs and releases.

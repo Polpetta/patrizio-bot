@@ -17,7 +17,7 @@ site_name = "Patrizio"
 # meaningful description of the site content for use by search engines.
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_description
-site_description = "A very simple Delta Chat bot designed for friends and meme groups "
+site_description = "A very simple Delta Chat bot designed for friends and meme groups"
 
 # The site_author attribute. This is used in the HTML head element.
 #
@@ -60,6 +60,7 @@ nav = [
      { "Contributing" = "dev/contributing.md" },
      { "Storage" = "dev/storage.md" },
    ]},
+   { "FAQ" = "faq.md" },
    { "Changelog" = "changelog.md" }
 ]
 

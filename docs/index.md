@@ -17,12 +17,12 @@ At the moment of writing, there's not a public and default instance of Patrizio.
 necessary to deploy a copy. Be not afraid! If you are a geeky nerd, deploying Patrizio is dead easy. All the
 instructions are described in the [Development Documentation](dev/index.md).
 
-Do you want to know all the tips and tricks on how to use it? Head down to the [Usage guide](usage.md), where you can find
+Do you want to know all the tips and tricks on how to use it? Head down to the [Usage guide](user/index.md), where you can find
 all the available commands and how to use them!
 
 ## Documentation
 
-* [User guide](usage.md)
+* [User guide](user/index.md)
 * [Dev guide](dev/index.md)
 
 !!! warning "Patrizio is in early development"

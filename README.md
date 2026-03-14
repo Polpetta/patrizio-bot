@@ -55,10 +55,11 @@ direct message to get help text.
 
 Configuration is done via environment variables prefixed with `PATRIZIO_`:
 
-| Variable             | Default         | Description                      |
-|----------------------|-----------------|----------------------------------|
-| `PATRIZIO_DB_PATH`   | `./patrizio.db` | Path to the SQLite database file |
-| `PATRIZIO_LOG_LEVEL` | `info`          | Log level                        |
+| Variable              | Default         | Description                             |
+|-----------------------|-----------------|-----------------------------------------|
+| `PATRIZIO_DB_PATH`    | `./patrizio.db` | Path to the SQLite database file        |
+| `PATRIZIO_MEDIA_PATH` | `./media`       | Directory where media files are stored  |
+| `PATRIZIO_LOG_LEVEL`  | `info`          | Log level                               |
 
 The bot's Delta Chat account data is stored in a platform-specific config directory (e.g. `~/.config/patrizio/` on
 Linux), overridable with `--folder`:
@@ -130,7 +131,7 @@ make project-setup
 | `make migrate`                    | Run pending database migrations                                   |
 | `make migrate-create NAME=<name>` | Create a new migration file                                       |
 | `make sqlc`                       | Regenerate Go code from SQL query files                           |
-| `make doc-activate-env`           | Simply activate python `venv` for Zensical                        |
+| `make doc-activate-venv`          | Simply activate python `venv` for Zensical                        |
 | `make doc-setup`                  | Command to only setup documentation (included in `project setup`) |
 | `make doc-build`                  | Builds the documentation and output in `site` directory           |
 | `make doc-local`                  | Serves the documentation locally, at `localhost:8000`             |

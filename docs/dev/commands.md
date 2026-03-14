@@ -13,7 +13,7 @@ packages.
 
 ## Reaction based commands (aka Filters)
 
-Here is the list of the current implemented filters (note this is not an usage guide, that one can be seen in the [User guide](../user/usage.md)):
+Here is the list of the current implemented filters (note this is not an usage guide, that one can be seen in the [User guide](../user/index.md)):
 
 | Command    | What it does                                                                                                    | Example                   |
 |------------|-----------------------------------------------------------------------------------------------------------------|---------------------------|

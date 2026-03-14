@@ -38,11 +38,11 @@ process the message accordingly. Once the message has been processed, Delta Chat
 accordingly.
 
 !!! note "About Delta Chat RPC"
-    The component should has its own Repository, but
+    The component should have its own Repository, but
     for easiness of development we've decided to keep it inside the `bot`
     package. This will be addressed in the future.
 
-### Message dispaching
+### Message dispatching
 
 The functionalities served between 1-to-1 chats (DMs) and Groups are different.
 
