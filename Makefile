@@ -44,19 +44,15 @@ migrate-create:
 sqlc:
 	sqlc generate
 
-doc-activate-venv:
-	source ./.venv/bin/activate
-
 doc-setup:
 	python3 -m venv .venv
-	source ./.venv/bin/activate
-	pip3 install zensical
+	source ./.venv/bin/activate && pip3 install zensical==0.0.27
 
-doc-build: doc-activate-venv
-	zensical build
+doc-build:
+	source ./.venv/bin/activate && zensical build
 
-doc-local: doc-activate-venv
-	./.venv/bin/zensical serve
+doc-local:
+	source ./.venv/bin/activate && zensical serve
 
 # Remove build artifacts
 clean:

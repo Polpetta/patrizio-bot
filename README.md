@@ -129,7 +129,6 @@ make project-setup
 | `make migrate`                    | Run pending database migrations                                   |
 | `make migrate-create NAME=<name>` | Create a new migration file                                       |
 | `make sqlc`                       | Regenerate Go code from SQL query files                           |
-| `make doc-activate-venv`          | Simply activate python `venv` for Zensical                        |
 | `make doc-setup`                  | Command to only setup documentation (included in `project setup`) |
 | `make doc-build`                  | Builds the documentation and output in `site` directory           |
 | `make doc-local`                  | Serves the documentation locally, at `localhost:8000`             |
