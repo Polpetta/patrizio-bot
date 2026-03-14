@@ -162,11 +162,12 @@ Generated code is written to `internal/database/queries/`.
 
 ## AI disclamer
 
-As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI (Claude, in
-particular). This means, bootstrapping the project and adding the very first feature. I would never had enough time to
-learn all the Delta Chat RPC basics and to start the project. I understand someone might not be OK with it, but by using
-it and contributing, you accept this face. Other AI assistance tools will be used during the development, in particular
-with the aim to explore and learn bot Delta Chat RPC and AI tools.
+As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI (Claude CLI, in
+particular since I try to stick to local models hosted via Ollama as much as possible). This means, bootstrapping the
+project and adding the very first feature. I would never had enough time to learn all the Delta Chat RPC basics and to
+start the project. I understand someone might not be OK with it, but by using it and contributing, you accept this face.
+Other AI assistance tools will be used during the development, in particular with the aim to explore and learn bot Delta
+Chat RPC and AI tools.
 
 ## More?
 
