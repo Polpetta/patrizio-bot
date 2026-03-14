@@ -119,20 +119,22 @@ make project-setup
 
 ### Makefile Targets
 
-<!-- FIXME: update table with new Make commands -->
-
-| Target | Description |
-|---|---|
-| `project-setup` | Setup project related hooks (doesn't install new software) |
-| `make build` | Compile the binary |
-| `make run` | Run the bot in serve mode |
-| `make test` | Run all tests |
-| `make lint` | Run golangci-lint |
-| `make docker-build` | Build the Docker image |
-| `make migrate` | Run pending database migrations |
-| `make migrate-create NAME=<name>` | Create a new migration file |
-| `make sqlc` | Regenerate Go code from SQL query files |
-| `make clean` | Remove build artifacts |
+| Target                            | Description                                                       |
+|-----------------------------------|-------------------------------------------------------------------|
+| `make project-setup`              | Setup project related hooks (doesn't install new software)        |
+| `make build`                      | Compile the binary                                                |
+| `make run`                        | Run the bot in serve mode                                         |
+| `make test`                       | Run all tests                                                     |
+| `make lint`                       | Run golangci-lint                                                 |
+| `make docker-build`               | Build the Docker image                                            |
+| `make migrate`                    | Run pending database migrations                                   |
+| `make migrate-create NAME=<name>` | Create a new migration file                                       |
+| `make sqlc`                       | Regenerate Go code from SQL query files                           |
+| `make doc-activate-env`           | Simply activate python `venv` for Zensical                        |
+| `make doc-setup`                  | Command to only setup documentation (included in `project setup`) |
+| `make doc-build`                  | Builds the documentation and output in `site` directory           |
+| `make doc-local`                  | Serves the documentation locally, at `localhost:8000`             |
+| `make clean`                      | Remove build artifacts                                            |
 
 ### Database Migrations
 
