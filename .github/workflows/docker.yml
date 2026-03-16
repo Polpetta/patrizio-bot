@@ -3,6 +3,7 @@ name: Build docker images
 on:
   push:
     branches:
+      - '**'
     tags:
       - 'v*.*.*'
       - 'v*.*.*-*'
