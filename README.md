@@ -6,6 +6,8 @@
 
 </div>
 
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/Polpetta/patrizio-bot/main.svg)](https://results.pre-commit.ci/latest/github/Polpetta/patrizio-bot/main)
+
 A [Delta Chat](https://delta.chat/) bot for group chats, built with Go. Patrizio responds to messages based on
 configured keyword filters, inspired by [Miss Rose](https://missrose.org/) on Telegram. Its main aim is to be used in
 friend groups or with people known. Differently from Miss Rose, it does not serve as a bot moderator, since Delta Chat
