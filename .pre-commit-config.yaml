@@ -63,3 +63,14 @@ repos:
                 docs/old\.md$|
                 openspec/.*
             )$
+
+ci:
+  skip: [golangci-lint, go-build, run-tests] # These are already covered by `commit.yml` Github Actions
+  autofix_commit_msg: |
+    fix(lint): apply pre-commit lints
+
+    For more information, see https://pre-commit.ci
+  autoupdate_commit_msg: |
+    chore(ci): update pre-commit dependencies
+
+    For more information, see https://pre-commit.ci
