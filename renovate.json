@@ -4,5 +4,6 @@
     "config:best-practices"
   ],
   "automerge": true,
-  "automergeType": "branch"
+  "automergeType": "branch",
+  "labels": ["dependencies"]
 }
