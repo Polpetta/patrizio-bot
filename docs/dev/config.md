@@ -13,11 +13,11 @@ current directory or `/etc/patrizio/` to persist settings.
 
 The following table lists configuration keys, types, and defaults:
 
-| Key          | Type   | Default                | Description |
-|---------------|--------|-----------------------|---------------|
-| `db_path`    | string | `/data/db/patrizio.db` | SQLite database file path |
-| `log_level`  | string | `info`                | Logging verbosity (`debug`, `info`, `warn`, `error`) |
-| `media_path` | string | `/data/media`         | Directory where media files are stored |
+| Key          | Type   | Default                | Description                                          |
+|--------------|--------|------------------------|------------------------------------------------------|
+| `db_path`    | string | `/data/db/patrizio.db` | SQLite database file path                            |
+| `log_level`  | string | `info`                 | Logging verbosity (`debug`, `info`, `warn`, `error`) |
+| `media_path` | string | `/data/media`          | Directory where media files are stored               |
 
 ## TOML File Example
 
