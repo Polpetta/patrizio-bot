@@ -3,8 +3,8 @@ module github.com/polpetta/patrizio
 go 1.25.7
 
 require (
-	github.com/chatmail/rpc-client-go v1.2.15-0.20260215043703-c87f0dc641be
-	github.com/deltachat-bot/deltabot-cli-go v1.2.14
+	github.com/chatmail/rpc-client-go v1.2.42
+	github.com/deltachat-bot/deltabot-cli-go v1.2.42
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.8.0
