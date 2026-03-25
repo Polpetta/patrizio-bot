@@ -7,7 +7,7 @@ require (
 	github.com/deltachat-bot/deltabot-cli-go v1.2.42
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/spf13/afero v1.15.0
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	modernc.org/sqlite v1.45.0
 )
