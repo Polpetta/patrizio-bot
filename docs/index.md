@@ -11,7 +11,8 @@ configured properly, it can be chatty. After all, it's a penguin :penguin:
 If you have ever wondered _"man sometimes I'd just like to have someone sending **that** GIF when Joe writes this and I
 am AFK"_, then Patrizio is perfect for your use case. Of course, this is just an example. Currently, Patrizio can
 handle different kinds of reactions, such as replying with simple text messages, sending GIFs, reacting to messages
-and finally sending generic media.
+and finally sending generic media. On top of that, Patrizio can also chat with you through an AI assistant — just send
+`/prompt` and start a conversation. Reply to keep it going, no command prefix needed.
 
 At the moment of writing, there's not a public and default instance of Patrizio. So, in order to have _yours_, it is
 necessary to deploy a copy. Be not afraid! If you are a geeky nerd, deploying Patrizio is dead easy. All the

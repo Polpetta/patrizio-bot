@@ -30,3 +30,25 @@ information.
 
 Not yet, due to data being saved in plain without any security. I'll think about a public instance once some sort of
 privacy measure has been taken in that sense
+
+## Why does `/prompt` say it's not configured?
+
+The `/prompt` command requires an OpenAI-compatible API key. If the bot operator hasn't set `openai_api_key` in the
+configuration, the feature is disabled. Check the [configuration docs](dev/config.md) for setup instructions.
+
+## Why does `/prompt` say I'm not authorized?
+
+The bot operator can restrict which chats are allowed to use the AI feature via the `openai_allowed_chat_ids` setting.
+If your chat is not in the list, you'll receive a "not authorized" message. Ask the person running the bot to add your
+chat ID to the allowlist.
+
+## Can I use a local AI model instead of OpenAI?
+
+Yes! Patrizio supports any OpenAI-compatible API. You can point it at [Ollama](https://ollama.com/),
+[LMStudio](https://lmstudio.ai/), or any other provider by setting `openai_base_url` to the local endpoint. For
+example, for Ollama you would set `openai_base_url = "http://localhost:11434/v1"`.
+
+## How do I start a fresh AI conversation?
+
+Each `/prompt` creates an independent thread. To start over, simply send a new `/prompt` message instead of replying to
+an existing conversation chain.

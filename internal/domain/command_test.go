@@ -205,6 +205,8 @@ func TestGetCommandType(t *testing.T) {
 		{"/stop hello", "/stop"},
 		{"/stopall", "/stopall"},
 		{"/filters", "/filters"},
+		{"/prompt What is the capital?", "/prompt"},
+		{"/prompt", "/prompt"},
 		{"hello /filter", ""},
 		{"not a command", ""},
 	}
@@ -214,6 +216,59 @@ func TestGetCommandType(t *testing.T) {
 			result := GetCommandType(tt.input)
 			if result != tt.expected {
 				t.Errorf("GetCommandType(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParsePromptCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:  "Simple message",
+			input: "/prompt What is the capital of France?",
+			want:  "What is the capital of France?",
+		},
+		{
+			name:  "Multi-word message",
+			input: "/prompt Tell me a story about a dog",
+			want:  "Tell me a story about a dog",
+		},
+		{
+			name:  "Message with extra spaces",
+			input: "/prompt   Hello there  ",
+			want:  "Hello there",
+		},
+		{
+			name:    "Empty message",
+			input:   "/prompt",
+			wantErr: true,
+		},
+		{
+			name:    "Only whitespace",
+			input:   "/prompt   ",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParsePromptCommand(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ParsePromptCommand(%q) expected error, got nil", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParsePromptCommand(%q) unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Errorf("ParsePromptCommand(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

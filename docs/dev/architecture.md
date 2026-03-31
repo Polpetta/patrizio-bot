@@ -23,15 +23,17 @@ flowchart TD
   C -->|Domain logic| D[domain]
   D -->|Repository| E[sqlite/repository]
   E -->|SQLite DB| F[SQLite]
+  C -->|AI completion| H[openai/client]
+  H -->|OpenAI-compatible API| I[LLM Provider]
   C -->|Reply| G[Delta Chat RPC]
 ```
 
 </div>
 
-The deltabot‑cli‑go framework powers the bot.  `internal/bot/bot.go` registers two callbacks:
+The deltabot-cli-go framework powers the bot.  `internal/bot/bot.go` registers two callbacks:
 
-* **OnBotInit** – called once when the bot starts.  It’s mainly a hook for future extensions.
-* **OnNewMsg** – invoked for every message received.  This is where the bot does its work.
+* **OnBotInit** -- called once when the bot starts.  It's mainly a hook for future extensions.
+* **OnNewMsg** -- invoked for every message received.  This is where the bot does its work.
 
 The `handler.go` plays a central role in parsing the incoming message and then calling the right handler, that will
 process the message accordingly. Once the message has been processed, Delta Chat RPC is invoked to reply to the user
@@ -48,11 +50,13 @@ The functionalities served between 1-to-1 chats (DMs) and Groups are different.
 
 #### Group chats
 
-For groups the handler first looks for bot commands (`/filter`, `/stop`, etc.). If the text is a command, it’s parsed by
-the domain code. If it’s not a command, the message is normalised (lower‑cased, punctuation removed) and the repository
-is queried for matching filters. Every matching filter triggers a reply: text, media, or a reaction, with media files
-fetched from the storage adapter.
+For groups the handler first looks for bot commands (`/filter`, `/stop`, `/prompt`, etc.). If the text is a command,
+it's parsed by the domain code. If the message is not a command, the handler checks whether it quotes a known
+conversation message -- if so, it's treated as a thread continuation and dispatched to the AI flow. Otherwise, the
+message is normalised (lower-cased, punctuation removed) and the repository is queried for matching filters. Every
+matching filter triggers a reply: text, media, or a reaction, with media files fetched from the storage adapter.
 
 #### Direct chats
 
-In a one‑to‑one conversation the bot simply replies with a short help message – the logic is intentionally minimal.
+In a one-to-one conversation the bot first checks for the `/prompt` command, then for thread continuations (replies to
+a previous AI message). If neither applies, it falls back to a short help message listing the available commands.

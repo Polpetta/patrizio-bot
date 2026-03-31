@@ -6,10 +6,24 @@ icon: lucide/terminal
 
 All commands are parsed by the pure‑logic layer in `internal/domain/command.go`.
 The package exports a small set of command structs – a `FilterCommand`, a
-`StopCommand`. It also includes a few constants that represent the four
+`StopCommand`. It also includes a few constants that represent the
 supported commands. For now, all the commands live there since they're quite
 simple and it doesn't make sense yet to split into additional separated
 packages.
+
+## AI Prompt command
+
+| Command   | What it does                                                          | Example                                  |
+|-----------|-----------------------------------------------------------------------|------------------------------------------|
+| `/prompt` | Send a message to the AI assistant. Starts a new conversation thread. | `/prompt What is the capital of France?` |
+
+The `/prompt` command is parsed by `ParsePromptCommand`, which simply extracts everything after `/prompt` as the
+user's message text. Unlike filter commands, `/prompt` does not go through token extraction or trigger validation — it
+passes the raw message content to the AI client.
+
+Thread continuations (replies to Patrizio's AI messages) are detected by `isThreadContinuation` in `handler.go`, not
+by the command parser. When a message quotes a known conversation message, it is treated as a continuation without
+requiring any command prefix.
 
 ## Reaction based commands (aka Filters)
 

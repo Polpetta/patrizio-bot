@@ -8,3 +8,22 @@ log_level = "debug"
 
 # Media storage directory
 media_path = "/data/media"
+
+# OpenAI-compatible API configuration (for /prompt command)
+# API key (required to enable the /prompt command)
+#openai_api_key = ""
+
+# Base URL for OpenAI-compatible API (optional, defaults to OpenAI's API)
+#openai_base_url = ""
+
+# Model to use for chat completions (default: "gpt-4o-mini")
+#openai_model = "gpt-4o-mini"
+
+# Maximum number of conversation history messages to include (default: 50)
+#openai_max_history = 50
+
+# System prompt prepended to every conversation (default: "You are a helpful assistant.")
+#openai_system_prompt = "You are a helpful assistant."
+
+# Chat ID allowlist — if non-empty, only these chats can use /prompt (default: empty = all allowed)
+#openai_allowed_chat_ids = []
