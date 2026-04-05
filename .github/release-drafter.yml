@@ -37,10 +37,6 @@ template: |
   ## Changes
 
   $CHANGES
-footer: |
-  Thanks for all the contributors of this release!
-
-  $CONTRIBUTORS
 autolabeler:
   - label: "documentation"
     files:
