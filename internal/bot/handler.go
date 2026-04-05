@@ -108,6 +108,7 @@ func newMsgHandler(cli *botcli.BotCli, _ *deltachat.Bot, deps *domain.Dependenci
 				return
 			}
 
+			logger.Infof("Received message %d in chat %d (type: %s)", msgID, accID, chatInfo.ChatType)
 			switch chatInfo.ChatType {
 			case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
 				handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
