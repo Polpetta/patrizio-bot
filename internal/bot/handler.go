@@ -83,38 +83,40 @@ func convertChatID(chatID deltachat.ChatId) (int64, error) {
 // newMsgHandler returns the OnNewMsg callback that routes incoming messages.
 func newMsgHandler(cli *botcli.BotCli, _ *deltachat.Bot, deps *domain.Dependencies) deltachat.NewMsgHandler {
 	return func(bot *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
-		logger := cli.GetLogger(accID)
+		go func() {
+			logger := cli.GetLogger(accID)
 
-		// Extract bot.Rpc as the rpcClient interface so all downstream
-		// handler functions are decoupled from *deltachat.Bot and can be
-		// tested with a mock.
-		rpc := bot.Rpc
+			// Extract bot.Rpc as the rpcClient interface so all downstream
+			// handler functions are decoupled from *deltachat.Bot and can be
+			// tested with a mock.
+			rpc := bot.Rpc
 
-		msg, err := rpc.GetMessage(accID, msgID)
-		if err != nil {
-			logger.Errorf("Failed to get message %d: %v", msgID, err)
-			return
-		}
+			msg, err := rpc.GetMessage(accID, msgID)
+			if err != nil {
+				logger.Errorf("Failed to get message %d: %v", msgID, err)
+				return
+			}
 
-		// Ignore messages from special contacts (system, device, etc.).
-		if msg.FromId <= deltachat.ContactLastSpecial {
-			return
-		}
+			// Ignore messages from special contacts (system, device, etc.).
+			if msg.FromId <= deltachat.ContactLastSpecial {
+				return
+			}
 
-		chatInfo, err := rpc.GetBasicChatInfo(accID, msg.ChatId)
-		if err != nil {
-			logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatId, err)
-			return
-		}
+			chatInfo, err := rpc.GetBasicChatInfo(accID, msg.ChatId)
+			if err != nil {
+				logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatId, err)
+				return
+			}
 
-		switch chatInfo.ChatType {
-		case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
-			handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
-		case deltachat.ChatSingle:
-			handleDMMessage(rpc, logger, accID, msgID, msg, deps)
-		default:
-			logger.Warnf("Unknown chat type %s for chat %d, ignoring", chatInfo.ChatType, msg.ChatId)
-		}
+			switch chatInfo.ChatType {
+			case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
+				handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
+			case deltachat.ChatSingle:
+				handleDMMessage(rpc, logger, accID, msgID, msg, deps)
+			default:
+				logger.Warnf("Unknown chat type %s for chat %d, ignoring", chatInfo.ChatType, msg.ChatId)
+			}
+		}()
 	}
 }
 
@@ -785,7 +787,7 @@ func handlePromptCommand(
 	// Check if AI client is configured
 	if deps.AIClient == nil {
 		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
-			"The AI assistant is not configured. Please set the OpenAI configuration (API key, base URL, model) and restart the bot.")
+			"The AI assistant is not configured. Please set the proper configuration (API key, base URL, model) and restart the bot.")
 		return
 	}
 
@@ -868,7 +870,7 @@ func handleThreadContinuation(
 	// Check if AI client is configured
 	if deps.AIClient == nil {
 		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
-			"The AI assistant is not configured. Please set the OpenAI configuration (API key, base URL, model) and restart the bot.")
+			"The AI assistant is not configured. Please set the proper configuration (API key, base URL, model) and restart the bot.")
 		return
 	}
 
