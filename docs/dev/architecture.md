@@ -32,8 +32,8 @@ flowchart TD
 
 The deltabot-cli-go framework powers the bot.  `internal/bot/bot.go` registers two callbacks:
 
-* **OnBotInit** -- called once when the bot starts.  It's mainly a hook for future extensions.
-* **OnNewMsg** -- invoked for every message received.  This is where the bot does its work.
+* **OnBotInit** - called once when the bot starts.  It's mainly a hook for future extensions.
+* **OnNewMsg** - invoked for every message received.  This is where the bot does its work.
 
 The `handler.go` plays a central role in parsing the incoming message and then calling the right handler, that will
 process the message accordingly. Once the message has been processed, Delta Chat RPC is invoked to reply to the user
@@ -52,7 +52,7 @@ The functionalities served between 1-to-1 chats (DMs) and Groups are different.
 
 For groups the handler first looks for bot commands (`/filter`, `/stop`, `/prompt`, etc.). If the text is a command,
 it's parsed by the domain code. If the message is not a command, the handler checks whether it quotes a known
-conversation message -- if so, it's treated as a thread continuation and dispatched to the AI flow. Otherwise, the
+conversation message - if so, it's treated as a thread continuation and dispatched to the AI flow. Otherwise, the
 message is normalised (lower-cased, punctuation removed) and the repository is queried for matching filters. Every
 matching filter triggers a reply: text, media, or a reaction, with media files fetched from the storage adapter.
 
