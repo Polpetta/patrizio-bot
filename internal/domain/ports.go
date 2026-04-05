@@ -35,12 +35,6 @@ type Config interface {
 	OpenAISystemPrompt() string
 }
 
-// ChatMessage represents a single message in a conversation thread.
-type ChatMessage struct {
-	Role    string
-	Content string
-}
-
 // AIClient defines the port for AI chat completion services.
 type AIClient interface {
 	ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error)
