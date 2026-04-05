@@ -20,6 +20,7 @@ import (
 type handlerLogger interface {
 	Infof(string, ...interface{})
 	Errorf(string, ...interface{})
+	Warnf(string, ...interface{})
 }
 
 const helpText = `Hi! I'm Patrizio, a group chat bot.
@@ -83,41 +84,45 @@ func convertChatID(chatID deltachat.ChatId) (int64, error) {
 // newMsgHandler returns the OnNewMsg callback that routes incoming messages.
 func newMsgHandler(cli *botcli.BotCli, _ *deltachat.Bot, deps *domain.Dependencies) deltachat.NewMsgHandler {
 	return func(bot *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
-		go func() {
-			logger := cli.GetLogger(accID)
+		go processMessage(bot.Rpc, cli.GetLogger(accID), accID, msgID, deps)
+	}
+}
 
-			// Extract bot.Rpc as the rpcClient interface so all downstream
-			// handler functions are decoupled from *deltachat.Bot and can be
-			// tested with a mock.
-			rpc := bot.Rpc
+// processMessage contains the core per-message routing logic.
+// It is extracted from the newMsgHandler goroutine so it can be called
+// synchronously in tests without depending on *botcli.BotCli.
+func processMessage(
+	rpc rpcClient,
+	logger handlerLogger,
+	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
+	deps *domain.Dependencies,
+) {
+	msg, err := rpc.GetMessage(accID, msgID)
+	if err != nil {
+		logger.Errorf("Failed to get message %d: %v", msgID, err)
+		return
+	}
 
-			msg, err := rpc.GetMessage(accID, msgID)
-			if err != nil {
-				logger.Errorf("Failed to get message %d: %v", msgID, err)
-				return
-			}
+	// Ignore messages from special contacts (system, device, etc.).
+	if msg.FromId <= deltachat.ContactLastSpecial {
+		return
+	}
 
-			// Ignore messages from special contacts (system, device, etc.).
-			if msg.FromId <= deltachat.ContactLastSpecial {
-				return
-			}
+	chatInfo, err := rpc.GetBasicChatInfo(accID, msg.ChatId)
+	if err != nil {
+		logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatId, err)
+		return
+	}
 
-			chatInfo, err := rpc.GetBasicChatInfo(accID, msg.ChatId)
-			if err != nil {
-				logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatId, err)
-				return
-			}
-
-			logger.Infof("Received message %d in chat %d (type: %s)", msgID, accID, chatInfo.ChatType)
-			switch chatInfo.ChatType {
-			case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
-				handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
-			case deltachat.ChatSingle:
-				handleDMMessage(rpc, logger, accID, msgID, msg, deps)
-			default:
-				logger.Warnf("Unknown chat type %s for chat %d, ignoring", chatInfo.ChatType, msg.ChatId)
-			}
-		}()
+	logger.Infof("Received message %d in chat %d (type: %s)", msgID, accID, chatInfo.ChatType)
+	switch chatInfo.ChatType {
+	case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
+		handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
+	case deltachat.ChatSingle:
+		handleDMMessage(rpc, logger, accID, msgID, msg, deps)
+	default:
+		logger.Warnf("Unknown chat type %s for chat %d, ignoring", chatInfo.ChatType, msg.ChatId)
 	}
 }
 

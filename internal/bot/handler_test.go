@@ -1517,3 +1517,161 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 		t.Error("filter matching should not have been attempted")
 	}
 }
+
+// --- processMessage Tests ---
+
+// makeGroupRPC returns a mockRPC configured to successfully return a regular-user message
+// in the given chat type, suitable for processMessage tests.
+func makeGroupRPC(msgFromID deltachat.ContactId, chatType deltachat.ChatType) *mockRPC {
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return &deltachat.MsgSnapshot{
+			Id:       1,
+			ChatId:   100,
+			FromId:   msgFromID,
+			Text:     "hello",
+			ViewType: deltachat.MsgText,
+		}, nil
+	}
+	rpc.getBasicChatInfoFn = func(_ deltachat.AccountId, _ deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
+		return &deltachat.BasicChatSnapshot{ChatType: chatType}, nil
+	}
+	return rpc
+}
+
+func TestProcessMessage_GetMessageError(t *testing.T) {
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return nil, fmt.Errorf("rpc down")
+	}
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.errors) == 0 {
+		t.Error("expected an error to be logged when GetMessage fails")
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no RPC send calls when GetMessage fails")
+	}
+}
+
+func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
+	// deltachat.ContactLastSpecial == 9, so use FromId = 5 (special).
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return &deltachat.MsgSnapshot{
+			Id:     1,
+			ChatId: 100,
+			FromId: deltachat.ContactLastSpecial, // special
+			Text:   "system message",
+		}, nil
+	}
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.errors) != 0 {
+		t.Errorf("expected no errors, got: %v", logger.errors)
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no send calls for special-contact message")
+	}
+	// GetBasicChatInfo should NOT have been called.
+	// We verify indirectly: getBasicChatInfoFn is nil, so if it were called it would
+	// return an error which would appear in logger.errors.
+}
+
+func TestProcessMessage_GetChatInfoError(t *testing.T) {
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return &deltachat.MsgSnapshot{Id: 1, ChatId: 100, FromId: 42, Text: "hi"}, nil
+	}
+	rpc.getBasicChatInfoFn = func(_ deltachat.AccountId, _ deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
+		return nil, fmt.Errorf("chat info unavailable")
+	}
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.errors) == 0 {
+		t.Error("expected an error to be logged when GetBasicChatInfo fails")
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no send calls when GetBasicChatInfo fails")
+	}
+}
+
+func TestProcessMessage_RoutesGroupChat(t *testing.T) {
+	// Use a regular user FromId (> ContactLastSpecial == 9).
+	rpc := makeGroupRPC(42, deltachat.ChatGroup)
+	logger := &mockLogger{}
+	repo := &mockFilterRepository{
+		matchingFilters: []domain.FilterResponse{
+			{ResponseType: domain.ResponseTypeText, ResponseText: "hi"},
+		},
+	}
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	// handleGroupMessage was reached: it tried filter matching and sent a response.
+	if len(rpc.sentMsgData) == 0 {
+		t.Error("expected group handler to be invoked and send a response")
+	}
+	if len(logger.errors) != 0 {
+		t.Errorf("unexpected errors: %v", logger.errors)
+	}
+}
+
+func TestProcessMessage_RoutesSingleChat(t *testing.T) {
+	rpc := makeGroupRPC(42, deltachat.ChatSingle)
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	// handleDMMessage was reached: it sends the help text via MiscSendTextMessage.
+	if len(rpc.sentMessages) == 0 {
+		t.Error("expected DM handler to be invoked and send help text")
+	}
+	if rpc.sentMessages[0].text != helpText {
+		t.Errorf("expected help text, got %q", rpc.sentMessages[0].text)
+	}
+}
+
+func TestProcessMessage_UnknownChatTypeWarns(t *testing.T) {
+	rpc := makeGroupRPC(42, deltachat.ChatType("Unknown"))
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.warns) == 0 {
+		t.Error("expected a warning to be logged for unknown chat type")
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no send calls for unknown chat type")
+	}
+}
