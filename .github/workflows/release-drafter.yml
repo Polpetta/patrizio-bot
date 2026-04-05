@@ -12,6 +12,7 @@ permissions:
 jobs:
   update_release_draft:
     runs-on: ubuntu-latest
+    name: Update release draft
     steps:
       - uses: release-drafter/release-drafter@v7
         with:
