@@ -20,6 +20,7 @@ const (
 	CommandStop    = "/stop"
 	CommandStopAll = "/stopall"
 	CommandFilters = "/filters"
+	CommandPrompt  = "/prompt"
 )
 
 // FilterCommand represents a parsed /filter command
@@ -219,7 +220,7 @@ func parseCommaSeparatedTriggers(text string) ([]string, error) {
 }
 
 // Helper to detect command type from message
-var commandPattern = regexp.MustCompile(`^(/filter|/stop|/stopall|/filters)\b`)
+var commandPattern = regexp.MustCompile(`^(/filter|/stop|/stopall|/filters|/prompt)\b`)
 
 // GetCommandType returns the command type if the message is a command, empty string otherwise
 func GetCommandType(text string) string {
@@ -228,4 +229,17 @@ func GetCommandType(text string) string {
 		return matches[1]
 	}
 	return ""
+}
+
+// ParsePromptCommand extracts the message text after "/prompt ".
+// Returns an error if the message is empty or only whitespace.
+func ParsePromptCommand(text string) (string, error) {
+	text = strings.TrimPrefix(text, CommandPrompt)
+	text = strings.TrimSpace(text)
+
+	if text == "" {
+		return "", fmt.Errorf("%w: message is required after /prompt", ErrInvalidCommand)
+	}
+
+	return text, nil
 }

@@ -27,4 +27,22 @@ type Config interface {
 	DBPath() string
 	LogLevel() string
 	MediaPath() string
+	OpenAIBaseURL() string
+	OpenAIAPIKey() string
+	OpenAIModel() string
+	OpenAIMaxHistory() int
+	OpenAIAllowedChatIDs() []int64
+	OpenAISystemPrompt() string
+}
+
+// AIClient defines the port for AI chat completion services.
+type AIClient interface {
+	ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error)
+}
+
+// ConversationRepository defines database operations for conversation threads.
+type ConversationRepository interface {
+	SaveMessage(ctx context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string) error
+	GetThreadChain(ctx context.Context, leafMsgID int64, limit int) ([]ChatMessage, error)
+	IsConversationMessage(ctx context.Context, msgID int64) (bool, *int64, error)
 }

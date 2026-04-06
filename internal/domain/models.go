@@ -34,6 +34,12 @@ type FilterTrigger struct {
 	TriggerText string
 }
 
+// ChatMessage represents a single message in a conversation thread.
+type ChatMessage struct {
+	Role    string
+	Content string
+}
+
 // FilterResponse represents the response associated with a filter
 type FilterResponse struct {
 	FilterID     int64

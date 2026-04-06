@@ -223,6 +223,90 @@ func (l *mockLogger) Warnf(format string, args ...interface{}) {
 	l.warns = append(l.warns, fmt.Sprintf(format, args...))
 }
 
+// --- Mock AIClient ---
+
+type mockAIClient struct {
+	response string
+	err      error
+	// Track calls
+	lastMessages []domain.ChatMessage
+	called       bool
+}
+
+func (m *mockAIClient) ChatCompletion(_ context.Context, messages []domain.ChatMessage) (string, error) {
+	m.called = true
+	m.lastMessages = messages
+	return m.response, m.err
+}
+
+// --- Mock ConversationRepository ---
+
+type mockConversationRepo struct {
+	// SaveMessage tracking
+	savedMessages []savedConversationMessage
+	saveErr       error
+
+	// IsConversationMessage
+	isConvMsgExists     bool
+	isConvMsgThreadRoot *int64
+	isConvMsgErr        error
+
+	// GetThreadChain
+	threadChain    []domain.ChatMessage
+	threadChainErr error
+}
+
+type savedConversationMessage struct {
+	threadRootID int64
+	msgID        int64
+	parentMsgID  *int64
+	role         string
+	content      string
+}
+
+func (m *mockConversationRepo) SaveMessage(_ context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string) error {
+	m.savedMessages = append(m.savedMessages, savedConversationMessage{
+		threadRootID: threadRootID,
+		msgID:        msgID,
+		parentMsgID:  parentMsgID,
+		role:         role,
+		content:      content,
+	})
+	return m.saveErr
+}
+
+func (m *mockConversationRepo) GetThreadChain(_ context.Context, _ int64, _ int) ([]domain.ChatMessage, error) {
+	return m.threadChain, m.threadChainErr
+}
+
+func (m *mockConversationRepo) IsConversationMessage(_ context.Context, _ int64) (bool, *int64, error) {
+	return m.isConvMsgExists, m.isConvMsgThreadRoot, m.isConvMsgErr
+}
+
+// --- Mock Config ---
+
+type mockConfig struct {
+	dbPath           string
+	logLevel         string
+	mediaPath        string
+	openAIBaseURL    string
+	openAIAPIKey     string
+	openAIModel      string
+	openAIMaxHistory int
+	allowedChatIDs   []int64
+	systemPrompt     string
+}
+
+func (m *mockConfig) DBPath() string                { return m.dbPath }
+func (m *mockConfig) LogLevel() string              { return m.logLevel }
+func (m *mockConfig) MediaPath() string             { return m.mediaPath }
+func (m *mockConfig) OpenAIBaseURL() string         { return m.openAIBaseURL }
+func (m *mockConfig) OpenAIAPIKey() string          { return m.openAIAPIKey }
+func (m *mockConfig) OpenAIModel() string           { return m.openAIModel }
+func (m *mockConfig) OpenAIMaxHistory() int         { return m.openAIMaxHistory }
+func (m *mockConfig) OpenAIAllowedChatIDs() []int64 { return m.allowedChatIDs }
+func (m *mockConfig) OpenAISystemPrompt() string    { return m.systemPrompt }
+
 // --- Helper: write a temp file and return its path ---
 
 func writeTempFile(t *testing.T, content []byte) string {
@@ -564,7 +648,12 @@ func TestHandleDMMessage(t *testing.T) {
 		Text:   "hey there",
 	}
 
-	handleDMMessage(rpc, logger, deltachat.AccountId(1), msg)
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	handleDMMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
 
 	if len(rpc.sentMessages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(rpc.sentMessages))
@@ -803,5 +892,786 @@ func TestConvertChatID(t *testing.T) {
 				t.Errorf("expected %d, got %d", tt.want, got)
 			}
 		})
+	}
+}
+
+// --- Prompt Command Tests ---
+
+func TestHandlePromptCommand_NewThread(t *testing.T) {
+	aiClient := &mockAIClient{response: "Paris is the capital of France."}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "You are a helpful assistant.",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt What is the capital of France?",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	// Verify AI was called with system prompt + user message
+	if !aiClient.called {
+		t.Fatal("expected AIClient.ChatCompletion to be called")
+	}
+	if len(aiClient.lastMessages) != 2 {
+		t.Fatalf("expected 2 messages (system+user), got %d", len(aiClient.lastMessages))
+	}
+	if aiClient.lastMessages[0].Role != "system" {
+		t.Errorf("expected first message role 'system', got %q", aiClient.lastMessages[0].Role)
+	}
+	if aiClient.lastMessages[1].Content != "What is the capital of France?" {
+		t.Errorf("expected user message content, got %q", aiClient.lastMessages[1].Content)
+	}
+
+	// Verify response was sent as quote-reply
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg call, got %d", len(rpc.sentMsgData))
+	}
+	if rpc.sentMsgData[0].data.Text != "Paris is the capital of France." {
+		t.Errorf("expected AI response text, got %q", rpc.sentMsgData[0].data.Text)
+	}
+	if rpc.sentMsgData[0].data.QuotedMessageId != 10 {
+		t.Errorf("expected QuotedMessageId 10, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
+	}
+
+	// Verify both messages were saved
+	if len(convRepo.savedMessages) != 2 {
+		t.Fatalf("expected 2 saved messages, got %d", len(convRepo.savedMessages))
+	}
+	// User message: thread_root=10, msg_id=10, parent=nil, role=user
+	userMsg := convRepo.savedMessages[0]
+	if userMsg.threadRootID != 10 || userMsg.msgID != 10 || userMsg.parentMsgID != nil || userMsg.role != "user" {
+		t.Errorf("unexpected user message: %+v", userMsg)
+	}
+	// Assistant message: thread_root=10, msg_id=1 (from mockRPC), parent=10, role=assistant
+	assistantMsg := convRepo.savedMessages[1]
+	if assistantMsg.threadRootID != 10 || assistantMsg.role != "assistant" {
+		t.Errorf("unexpected assistant message: %+v", assistantMsg)
+	}
+	if assistantMsg.parentMsgID == nil || *assistantMsg.parentMsgID != 10 {
+		t.Errorf("expected assistant parent msg ID 10, got %v", assistantMsg.parentMsgID)
+	}
+}
+
+func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
+	aiClient := &mockAIClient{response: "Hi!"}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	// Without system prompt, only 1 message should be sent
+	if len(aiClient.lastMessages) != 1 {
+		t.Fatalf("expected 1 message (user only), got %d", len(aiClient.lastMessages))
+	}
+	if aiClient.lastMessages[0].Role != "user" {
+		t.Errorf("expected role 'user', got %q", aiClient.lastMessages[0].Role)
+	}
+}
+
+func TestHandlePromptCommand_Unconfigured(t *testing.T) {
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+		AIClient:         nil, // Not configured
+		Config:           &mockConfig{},
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	// Should send error about unconfigured AI
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	}
+	if rpc.sentMsgData[0].data.Text == "" {
+		t.Error("expected non-empty error message")
+	}
+}
+
+func TestHandlePromptCommand_APIError(t *testing.T) {
+	aiClient := &mockAIClient{err: fmt.Errorf("API error")}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "You are helpful.",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	// Should send an error message to user
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	}
+	// No messages should be saved on error
+	if len(convRepo.savedMessages) != 0 {
+		t.Errorf("expected 0 saved messages on error, got %d", len(convRepo.savedMessages))
+	}
+}
+
+func TestHandlePromptCommand_AllowlistDenied(t *testing.T) {
+	aiClient := &mockAIClient{response: "Should not reach here"}
+	cfg := &mockConfig{
+		allowedChatIDs: []int64{200, 300}, // Chat 100 is NOT in the list
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: &mockConversationRepo{},
+		Config:                 cfg,
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	// AI should NOT be called
+	if aiClient.called {
+		t.Fatal("AI client should not be called for denied chat")
+	}
+	// Should send "not authorized" error
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	}
+}
+
+func TestHandlePromptCommand_AllowlistAllowed(t *testing.T) {
+	aiClient := &mockAIClient{response: "Allowed!"}
+	cfg := &mockConfig{
+		allowedChatIDs:   []int64{100, 200},
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: &mockConversationRepo{},
+		Config:                 cfg,
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	if !aiClient.called {
+		t.Fatal("AI client should be called for allowed chat")
+	}
+}
+
+func TestHandlePromptCommand_EmptyAllowlist(t *testing.T) {
+	aiClient := &mockAIClient{response: "Open access!"}
+	cfg := &mockConfig{
+		allowedChatIDs:   nil, // Empty = allow all
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: &mockConversationRepo{},
+		Config:                 cfg,
+	}
+
+	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	if !aiClient.called {
+		t.Fatal("AI client should be called when allowlist is empty")
+	}
+}
+
+// --- Thread Continuation Tests ---
+
+func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
+	threadRoot := int64(5)
+	aiClient := &mockAIClient{response: "Here's more detail."}
+	convRepo := &mockConversationRepo{
+		isConvMsgExists:     true,
+		isConvMsgThreadRoot: &threadRoot,
+		threadChain: []domain.ChatMessage{
+			{Role: "user", Content: "What is Go?"},
+			{Role: "assistant", Content: "Go is a programming language."},
+		},
+	}
+	cfg := &mockConfig{
+		systemPrompt:     "You are helpful.",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "Tell me more about Go",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 6, // Quoting a Patrizio message
+		},
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handleThreadContinuation(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps, threadRoot)
+
+	// Verify AI was called with system + chain + new user message
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called")
+	}
+	// system + 2 chain messages + 1 new user = 4
+	if len(aiClient.lastMessages) != 4 {
+		t.Fatalf("expected 4 messages, got %d", len(aiClient.lastMessages))
+	}
+	if aiClient.lastMessages[0].Role != "system" {
+		t.Errorf("expected first message role 'system', got %q", aiClient.lastMessages[0].Role)
+	}
+	if aiClient.lastMessages[3].Content != "Tell me more about Go" {
+		t.Errorf("expected last message to be user's new text, got %q", aiClient.lastMessages[3].Content)
+	}
+
+	// Verify response sent
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 SendMsg, got %d", len(rpc.sentMsgData))
+	}
+	if rpc.sentMsgData[0].data.Text != "Here's more detail." {
+		t.Errorf("expected AI response, got %q", rpc.sentMsgData[0].data.Text)
+	}
+
+	// Verify both messages saved
+	if len(convRepo.savedMessages) != 2 {
+		t.Fatalf("expected 2 saved messages, got %d", len(convRepo.savedMessages))
+	}
+	// User message: parent is the quoted msg (6)
+	userMsg := convRepo.savedMessages[0]
+	if userMsg.threadRootID != threadRoot || userMsg.role != "user" {
+		t.Errorf("unexpected user message: %+v", userMsg)
+	}
+	if userMsg.parentMsgID == nil || *userMsg.parentMsgID != 6 {
+		t.Errorf("expected parent msg ID 6, got %v", userMsg.parentMsgID)
+	}
+}
+
+func TestIsThreadContinuation_NoQuote(t *testing.T) {
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		Text:   "Just a normal message",
+	}
+
+	deps := &domain.Dependencies{
+		ConversationRepository: &mockConversationRepo{},
+	}
+
+	isCont, _ := isThreadContinuation(context.Background(), msg, deps)
+	if isCont {
+		t.Error("expected no continuation for message without quote")
+	}
+}
+
+func TestIsThreadContinuation_NonConversationQuote(t *testing.T) {
+	convRepo := &mockConversationRepo{
+		isConvMsgExists: false, // Quoted message is NOT a conversation message
+	}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		Text:   "Replying to something else",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 999,
+		},
+	}
+
+	deps := &domain.Dependencies{
+		ConversationRepository: convRepo,
+	}
+
+	isCont, _ := isThreadContinuation(context.Background(), msg, deps)
+	if isCont {
+		t.Error("expected no continuation for non-conversation quote")
+	}
+}
+
+func TestIsThreadContinuation_NilRepo(t *testing.T) {
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		Text:   "Some message",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 5,
+		},
+	}
+
+	deps := &domain.Dependencies{
+		ConversationRepository: nil,
+	}
+
+	isCont, _ := isThreadContinuation(context.Background(), msg, deps)
+	if isCont {
+		t.Error("expected no continuation when ConversationRepository is nil")
+	}
+}
+
+func TestHandleThreadContinuation_Unconfigured(t *testing.T) {
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "Continue thread",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 5,
+		},
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               nil, // Not configured
+		ConversationRepository: &mockConversationRepo{},
+		Config:                 &mockConfig{},
+	}
+
+	handleThreadContinuation(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps, 5)
+
+	// Should send error about unconfigured AI
+	if len(rpc.sentMsgData) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	}
+}
+
+func TestHandleThreadContinuation_AllowlistDenied(t *testing.T) {
+	aiClient := &mockAIClient{response: "Should not reach here"}
+	cfg := &mockConfig{
+		allowedChatIDs: []int64{200}, // Chat 100 NOT allowed
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "Continue",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 5,
+		},
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: &mockConversationRepo{},
+		Config:                 cfg,
+	}
+
+	handleThreadContinuation(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps, 5)
+
+	if aiClient.called {
+		t.Fatal("AI client should not be called for denied chat")
+	}
+}
+
+// --- DM Handler with Prompt ---
+
+func TestHandleDMMessage_PromptCommand(t *testing.T) {
+	aiClient := &mockAIClient{response: "AI response in DM"}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "Be helpful",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 50,
+		FromId: 42,
+		Text:   "/prompt Hello from DM",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handleDMMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called for /prompt in DM")
+	}
+	// Should NOT have sent help text
+	if len(rpc.sentMessages) != 0 {
+		t.Errorf("expected no MiscSendTextMessage calls, got %d", len(rpc.sentMessages))
+	}
+}
+
+func TestHandleDMMessage_ThreadContinuation(t *testing.T) {
+	threadRoot := int64(5)
+	aiClient := &mockAIClient{response: "Continued in DM"}
+	convRepo := &mockConversationRepo{
+		isConvMsgExists:     true,
+		isConvMsgThreadRoot: &threadRoot,
+		threadChain: []domain.ChatMessage{
+			{Role: "user", Content: "Original prompt"},
+			{Role: "assistant", Content: "Original response"},
+		},
+	}
+	cfg := &mockConfig{
+		systemPrompt:     "Be helpful",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 50,
+		FromId: 42,
+		Text:   "Follow up in DM",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 6,
+		},
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handleDMMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called for thread continuation in DM")
+	}
+	// Should NOT have sent help text
+	if len(rpc.sentMessages) != 0 {
+		t.Errorf("expected no MiscSendTextMessage calls, got %d", len(rpc.sentMessages))
+	}
+}
+
+// --- Group Handler with Prompt ---
+
+func TestHandleGroupMessage_PromptCommand(t *testing.T) {
+	aiClient := &mockAIClient{response: "Group AI response"}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "You are helpful.",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "/prompt Tell me a joke",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called for /prompt in group")
+	}
+}
+
+func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
+	threadRoot := int64(5)
+	aiClient := &mockAIClient{response: "Continued in group"}
+	convRepo := &mockConversationRepo{
+		isConvMsgExists:     true,
+		isConvMsgThreadRoot: &threadRoot,
+		threadChain: []domain.ChatMessage{
+			{Role: "user", Content: "Original prompt"},
+			{Role: "assistant", Content: "Original response"},
+		},
+	}
+	cfg := &mockConfig{
+		systemPrompt:     "Be helpful",
+		openAIMaxHistory: 50,
+	}
+	rpc := &mockRPC{}
+	repo := &mockFilterRepository{}
+	logger := &mockLogger{}
+
+	msg := &deltachat.MsgSnapshot{
+		ChatId: 100,
+		FromId: 42,
+		Text:   "Continue the thread",
+		Quote: &deltachat.MsgQuote{
+			MessageId: 6,
+		},
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       repo,
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+	}
+
+	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called for thread continuation in group")
+	}
+	// Should NOT have tried filter matching
+	if repo.matchingFilters != nil {
+		t.Error("filter matching should not have been attempted")
+	}
+}
+
+// --- processMessage Tests ---
+
+// makeGroupRPC returns a mockRPC configured to successfully return a regular-user message
+// in the given chat type, suitable for processMessage tests.
+func makeGroupRPC(msgFromID deltachat.ContactId, chatType deltachat.ChatType) *mockRPC {
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return &deltachat.MsgSnapshot{
+			Id:       1,
+			ChatId:   100,
+			FromId:   msgFromID,
+			Text:     "hello",
+			ViewType: deltachat.MsgText,
+		}, nil
+	}
+	rpc.getBasicChatInfoFn = func(_ deltachat.AccountId, _ deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
+		return &deltachat.BasicChatSnapshot{ChatType: chatType}, nil
+	}
+	return rpc
+}
+
+func TestProcessMessage_GetMessageError(t *testing.T) {
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return nil, fmt.Errorf("rpc down")
+	}
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.errors) == 0 {
+		t.Error("expected an error to be logged when GetMessage fails")
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no RPC send calls when GetMessage fails")
+	}
+}
+
+func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
+	// deltachat.ContactLastSpecial == 9, so use FromId = 5 (special).
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return &deltachat.MsgSnapshot{
+			Id:     1,
+			ChatId: 100,
+			FromId: deltachat.ContactLastSpecial, // special
+			Text:   "system message",
+		}, nil
+	}
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.errors) != 0 {
+		t.Errorf("expected no errors, got: %v", logger.errors)
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no send calls for special-contact message")
+	}
+	// GetBasicChatInfo should NOT have been called.
+	// We verify indirectly: getBasicChatInfoFn is nil, so if it were called it would
+	// return an error which would appear in logger.errors.
+}
+
+func TestProcessMessage_GetChatInfoError(t *testing.T) {
+	rpc := &mockRPC{}
+	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+		return &deltachat.MsgSnapshot{Id: 1, ChatId: 100, FromId: 42, Text: "hi"}, nil
+	}
+	rpc.getBasicChatInfoFn = func(_ deltachat.AccountId, _ deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
+		return nil, fmt.Errorf("chat info unavailable")
+	}
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.errors) == 0 {
+		t.Error("expected an error to be logged when GetBasicChatInfo fails")
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no send calls when GetBasicChatInfo fails")
+	}
+}
+
+func TestProcessMessage_RoutesGroupChat(t *testing.T) {
+	// Use a regular user FromId (> ContactLastSpecial == 9).
+	rpc := makeGroupRPC(42, deltachat.ChatGroup)
+	logger := &mockLogger{}
+	repo := &mockFilterRepository{
+		matchingFilters: []domain.FilterResponse{
+			{ResponseType: domain.ResponseTypeText, ResponseText: "hi"},
+		},
+	}
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	// handleGroupMessage was reached: it tried filter matching and sent a response.
+	if len(rpc.sentMsgData) == 0 {
+		t.Error("expected group handler to be invoked and send a response")
+	}
+	if len(logger.errors) != 0 {
+		t.Errorf("unexpected errors: %v", logger.errors)
+	}
+}
+
+func TestProcessMessage_RoutesSingleChat(t *testing.T) {
+	rpc := makeGroupRPC(42, deltachat.ChatSingle)
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	// handleDMMessage was reached: it sends the help text via MiscSendTextMessage.
+	if len(rpc.sentMessages) == 0 {
+		t.Error("expected DM handler to be invoked and send help text")
+	}
+	if rpc.sentMessages[0].text != helpText {
+		t.Errorf("expected help text, got %q", rpc.sentMessages[0].text)
+	}
+}
+
+func TestProcessMessage_UnknownChatTypeWarns(t *testing.T) {
+	rpc := makeGroupRPC(42, deltachat.ChatType("Unknown"))
+	logger := &mockLogger{}
+	deps := &domain.Dependencies{
+		FilterRepository: &mockFilterRepository{},
+		MediaStorage:     newMockMediaStorage(),
+	}
+
+	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+
+	if len(logger.warns) == 0 {
+		t.Error("expected a warning to be logged for unknown chat type")
+	}
+	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+		t.Error("expected no send calls for unknown chat type")
 	}
 }

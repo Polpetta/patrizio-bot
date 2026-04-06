@@ -5,8 +5,19 @@
 package queries
 
 import (
+	"database/sql"
 	"time"
 )
+
+type ConversationMessage struct {
+	ID           int64
+	ThreadRootID int64
+	MsgID        int64
+	ParentMsgID  sql.NullInt64
+	Role         string
+	Content      string
+	CreatedAt    time.Time
+}
 
 type Filter struct {
 	ID           int64

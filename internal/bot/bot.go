@@ -9,6 +9,7 @@ import (
 	"github.com/deltachat-bot/deltabot-cli-go/botcli"
 	"github.com/spf13/cobra"
 
+	oai "github.com/polpetta/patrizio/internal/adapter/openai"
 	"github.com/polpetta/patrizio/internal/adapter/sqlite"
 	"github.com/polpetta/patrizio/internal/adapter/storage"
 	"github.com/polpetta/patrizio/internal/config"
@@ -51,9 +52,17 @@ func InitDatabase(cfg domain.Config, migrationsFS fs.FS, migrationsDir string) (
 
 // BuildDependencies constructs the Dependencies with real adapter implementations.
 func BuildDependencies(cfg *config.Config, db *sql.DB) *domain.Dependencies {
-	return &domain.Dependencies{
-		FilterRepository: sqlite.New(db),
-		MediaStorage:     storage.New(afero.NewOsFs(), cfg.MediaPath()),
-		Config:           cfg,
+	deps := &domain.Dependencies{
+		FilterRepository:       sqlite.New(db),
+		MediaStorage:           storage.New(afero.NewOsFs(), cfg.MediaPath()),
+		Config:                 cfg,
+		ConversationRepository: sqlite.NewConversationRepository(db),
 	}
+
+	// Only create the OpenAI client if an API key is configured.
+	if cfg.OpenAIAPIKey() != "" {
+		deps.AIClient = oai.New(cfg.OpenAIAPIKey(), cfg.OpenAIBaseURL(), cfg.OpenAIModel())
+	}
+
+	return deps
 }

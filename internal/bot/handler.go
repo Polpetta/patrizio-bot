@@ -17,6 +17,12 @@ import (
 	"github.com/polpetta/patrizio/internal/domain"
 )
 
+type handlerLogger interface {
+	Infof(string, ...interface{})
+	Errorf(string, ...interface{})
+	Warnf(string, ...interface{})
+}
+
 const helpText = `Hi! I'm Patrizio, a group chat bot.
 
 Add me to a group and I'll respond to messages based on configured filters. Here's what I can do:
@@ -54,7 +60,13 @@ Add me to a group and I'll respond to messages based on configured filters. Here
 /filters
   List all active filters in the current chat.
 
-Triggers are matched as whole words anywhere in a message and are case-insensitive. I don't do much in direct messages — add me to a group to get started!`
+/prompt <message>
+  Send a message to the AI assistant. Each /prompt starts a new conversation thread.
+  To continue the conversation, simply reply to my response — no need to type /prompt again.
+  Example:
+  /prompt What is the capital of France?
+
+Triggers are matched as whole words anywhere in a message and are case-insensitive.`
 
 var errChatIDOverflow = errors.New("chat ID too large to convert")
 
@@ -72,38 +84,45 @@ func convertChatID(chatID deltachat.ChatId) (int64, error) {
 // newMsgHandler returns the OnNewMsg callback that routes incoming messages.
 func newMsgHandler(cli *botcli.BotCli, _ *deltachat.Bot, deps *domain.Dependencies) deltachat.NewMsgHandler {
 	return func(bot *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
-		logger := cli.GetLogger(accID)
+		go processMessage(bot.Rpc, cli.GetLogger(accID), accID, msgID, deps)
+	}
+}
 
-		// Extract bot.Rpc as the rpcClient interface so all downstream
-		// handler functions are decoupled from *deltachat.Bot and can be
-		// tested with a mock.
-		rpc := bot.Rpc
+// processMessage contains the core per-message routing logic.
+// It is extracted from the newMsgHandler goroutine so it can be called
+// synchronously in tests without depending on *botcli.BotCli.
+func processMessage(
+	rpc rpcClient,
+	logger handlerLogger,
+	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
+	deps *domain.Dependencies,
+) {
+	msg, err := rpc.GetMessage(accID, msgID)
+	if err != nil {
+		logger.Errorf("Failed to get message %d: %v", msgID, err)
+		return
+	}
 
-		msg, err := rpc.GetMessage(accID, msgID)
-		if err != nil {
-			logger.Errorf("Failed to get message %d: %v", msgID, err)
-			return
-		}
+	// Ignore messages from special contacts (system, device, etc.).
+	if msg.FromId <= deltachat.ContactLastSpecial {
+		return
+	}
 
-		// Ignore messages from special contacts (system, device, etc.).
-		if msg.FromId <= deltachat.ContactLastSpecial {
-			return
-		}
+	chatInfo, err := rpc.GetBasicChatInfo(accID, msg.ChatId)
+	if err != nil {
+		logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatId, err)
+		return
+	}
 
-		chatInfo, err := rpc.GetBasicChatInfo(accID, msg.ChatId)
-		if err != nil {
-			logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatId, err)
-			return
-		}
-
-		switch chatInfo.ChatType {
-		case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
-			handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
-		case deltachat.ChatSingle:
-			handleDMMessage(rpc, logger, accID, msg)
-		default:
-			logger.Warnf("Unknown chat type %s for chat %d, ignoring", chatInfo.ChatType, msg.ChatId)
-		}
+	logger.Infof("Received message %d in chat %d (type: %s)", msgID, msg.ChatId, chatInfo.ChatType)
+	switch chatInfo.ChatType {
+	case deltachat.ChatGroup, deltachat.ChatOutBroadcast, deltachat.ChatInBroadcast, deltachat.ChatMailinglist:
+		handleGroupMessage(rpc, logger, accID, msgID, msg, deps)
+	case deltachat.ChatSingle:
+		handleDMMessage(rpc, logger, accID, msgID, msg, deps)
+	default:
+		logger.Warnf("Unknown chat type %s for chat %d, ignoring", chatInfo.ChatType, msg.ChatId)
 	}
 }
 
@@ -111,10 +130,7 @@ func newMsgHandler(cli *botcli.BotCli, _ *deltachat.Bot, deps *domain.Dependenci
 // It checks for commands first, then normalizes the message and checks for matching filters.
 func handleGroupMessage(
 	rpc rpcClient,
-	logger interface {
-		Infof(string, ...interface{})
-		Errorf(string, ...interface{})
-	},
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
@@ -138,7 +154,16 @@ func handleGroupMessage(
 		case domain.CommandFilters:
 			handleFiltersCommand(rpc, logger, accID, msgID, msg, deps)
 			return
+		case domain.CommandPrompt:
+			handlePromptCommand(rpc, logger, accID, msgID, msg, deps)
+			return
 		}
+	}
+
+	// Check for thread continuation (reply to a Patrizio conversation message)
+	if isContinuation, threadRootID := isThreadContinuation(ctx, msg, deps); isContinuation {
+		handleThreadContinuation(rpc, logger, accID, msgID, msg, deps, threadRootID)
+		return
 	}
 
 	// Not a command - check for filter matches
@@ -217,7 +242,7 @@ func handleGroupMessage(
 // sendErrorMessage sends an error message as a quote-reply and logs if sending fails.
 func sendErrorMessage(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -234,7 +259,7 @@ func sendErrorMessage(
 // sendConfirmation sends a confirmation message as a quote-reply and logs if sending fails.
 func sendConfirmation(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -251,7 +276,7 @@ func sendConfirmation(
 // validateAndNormalizeTriggers validates all triggers and returns normalized versions.
 func validateAndNormalizeTriggers(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -278,7 +303,7 @@ func validateAndNormalizeTriggers(
 // handleTextFilterCreation creates a text filter and sends confirmation.
 func handleTextFilterCreation(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -313,7 +338,7 @@ func handleTextFilterCreation(
 // handleReactionFilterCreation creates a reaction filter and sends confirmation.
 func handleReactionFilterCreation(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -340,7 +365,7 @@ func handleReactionFilterCreation(
 // downloadMediaIfNeeded ensures the quoted message media is downloaded and returns the updated message.
 func downloadMediaIfNeeded(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -376,7 +401,7 @@ func downloadMediaIfNeeded(
 // processMediaFile reads the media file, computes its hash, and saves it to storage.
 func processMediaFile(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	chatID deltachat.ChatId,
 	replyTo deltachat.MsgId,
@@ -413,7 +438,7 @@ func processMediaFile(
 // handleMediaFilterCreation creates a media filter from an attached or quoted media message.
 func handleMediaFilterCreation(
 	rpc rpcClient,
-	logger interface{ Errorf(string, ...interface{}) },
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	msg *deltachat.MsgSnapshot,
 	replyTo deltachat.MsgId,
@@ -489,10 +514,7 @@ func handleMediaFilterCreation(
 // handleFilterCommand processes a /filter command
 func handleFilterCommand(
 	rpc rpcClient,
-	logger interface {
-		Infof(string, ...interface{})
-		Errorf(string, ...interface{})
-	},
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
@@ -569,10 +591,7 @@ func mapMediaTypeToViewType(mediaType string) deltachat.MsgType {
 // handleStopCommand processes a /stop command
 func handleStopCommand(
 	rpc rpcClient,
-	logger interface {
-		Infof(string, ...interface{})
-		Errorf(string, ...interface{})
-	},
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
@@ -621,10 +640,7 @@ func handleStopCommand(
 // handleStopAllCommand processes a /stopall command
 func handleStopAllCommand(
 	rpc rpcClient,
-	logger interface {
-		Infof(string, ...interface{})
-		Errorf(string, ...interface{})
-	},
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
@@ -662,10 +678,7 @@ func handleStopAllCommand(
 // handleFiltersCommand processes a /filters command
 func handleFiltersCommand(
 	rpc rpcClient,
-	logger interface {
-		Infof(string, ...interface{})
-		Errorf(string, ...interface{})
-	},
+	logger handlerLogger,
 	accID deltachat.AccountId,
 	msgID deltachat.MsgId,
 	msg *deltachat.MsgSnapshot,
@@ -731,8 +744,231 @@ func handleFiltersCommand(
 	sendConfirmation(rpc, logger, accID, msg.ChatId, msgID, sb.String())
 }
 
-// handleDMMessage processes a direct message by replying with help text.
-func handleDMMessage(rpc rpcClient, logger interface{ Errorf(string, ...interface{}) }, accID deltachat.AccountId, msg *deltachat.MsgSnapshot) {
+// isAllowedChat checks if the given chat ID is in the allowlist.
+// Returns true if the allowlist is empty (open access) or if the chat ID is in the list.
+func isAllowedChat(chatID int64, deps *domain.Dependencies) bool {
+	allowedChatIDs := deps.Config.OpenAIAllowedChatIDs()
+	if len(allowedChatIDs) == 0 {
+		return true // Empty list means all chats are allowed
+	}
+	for _, id := range allowedChatIDs {
+		if id == chatID {
+			return true
+		}
+	}
+	return false
+}
+
+// isThreadContinuation checks if the message is a reply to a Patrizio conversation message.
+// Returns (true, threadRootID) if it's a continuation, (false, 0) otherwise.
+func isThreadContinuation(ctx context.Context, msg *deltachat.MsgSnapshot, deps *domain.Dependencies) (bool, int64) {
+	if deps.ConversationRepository == nil {
+		return false, 0
+	}
+	if msg.Quote == nil || msg.Quote.MessageId == 0 {
+		return false, 0
+	}
+
+	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
+	quotedMsgID := int64(msg.Quote.MessageId)
+	exists, threadRootID, err := deps.ConversationRepository.IsConversationMessage(ctx, quotedMsgID)
+	if err != nil || !exists {
+		return false, 0
+	}
+
+	return true, *threadRootID
+}
+
+// handlePromptCommand processes a /prompt command, creating a new conversation thread.
+func handlePromptCommand(
+	rpc rpcClient,
+	logger handlerLogger,
+	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
+	msg *deltachat.MsgSnapshot,
+	deps *domain.Dependencies,
+) {
+	ctx := context.Background()
+
+	// Check if AI client is configured
+	if deps.AIClient == nil {
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"The AI assistant is not configured. Please set the proper configuration (API key, base URL, model) and restart the bot.")
+		return
+	}
+
+	// Check allowlist
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
+	if !isAllowedChat(chatID, deps) {
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"This chat is not authorized to use the AI assistant.")
+		return
+	}
+
+	// Parse the prompt message
+	promptText, err := domain.ParsePromptCommand(msg.Text)
+	if err != nil {
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID, fmt.Sprintf("Invalid command: %v", err))
+		return
+	}
+
+	// Build message array: system prompt (if set) + user message
+	var messages []domain.ChatMessage
+	if sysPrompt := deps.Config.OpenAISystemPrompt(); sysPrompt != "" {
+		messages = append(messages, domain.ChatMessage{Role: "system", Content: sysPrompt})
+	}
+	messages = append(messages, domain.ChatMessage{Role: "user", Content: promptText})
+
+	// Call AI client
+	response, err := deps.AIClient.ChatCompletion(ctx, messages)
+	if err != nil {
+		logger.Errorf("AI completion failed for chat %d: %v", msg.ChatId, err)
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"Sorry, I encountered an error while processing your request. Please try again later.")
+		return
+	}
+
+	// Send response as quote-reply
+	responseMsgID, err := rpc.SendMsg(accID, msg.ChatId, deltachat.MsgData{
+		Text:            response,
+		QuotedMessageId: msgID,
+	})
+	if err != nil {
+		logger.Errorf("Failed to send AI response to chat %d: %v", msg.ChatId, err)
+		return
+	}
+
+	// Save both messages to conversation repository.
+	// The thread root is the user's message (the /prompt message).
+	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
+	userMsgID := int64(msgID)
+	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
+	assistantMsgID := int64(responseMsgID)
+
+	// Save user message (root of thread, no parent)
+	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, userMsgID, nil, "user", promptText); err != nil {
+		logger.Errorf("Failed to save user message: %v", err)
+	}
+
+	// Save assistant message (parent is user message)
+	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, assistantMsgID, &userMsgID, "assistant", response); err != nil {
+		logger.Errorf("Failed to save assistant message: %v", err)
+	}
+}
+
+// handleThreadContinuation processes a reply to a Patrizio conversation message,
+// continuing an existing thread.
+func handleThreadContinuation(
+	rpc rpcClient,
+	logger handlerLogger,
+	accID deltachat.AccountId,
+	msgID deltachat.MsgId,
+	msg *deltachat.MsgSnapshot,
+	deps *domain.Dependencies,
+	threadRootID int64,
+) {
+	ctx := context.Background()
+
+	// Check if AI client is configured
+	if deps.AIClient == nil {
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"The AI assistant is not configured. Please set the proper configuration (API key, base URL, model) and restart the bot.")
+		return
+	}
+
+	// Check allowlist
+	chatID, err := convertChatID(msg.ChatId)
+	if err != nil {
+		logger.Errorf("Invalid chat ID %d: %v", msg.ChatId, err)
+		return
+	}
+	if !isAllowedChat(chatID, deps) {
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"This chat is not authorized to use the AI assistant.")
+		return
+	}
+
+	// Get the quoted message's MsgId (the leaf of the existing chain)
+	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
+	quotedMsgID := int64(msg.Quote.MessageId)
+
+	// Retrieve the existing conversation chain
+	maxHistory := deps.Config.OpenAIMaxHistory()
+	chain, err := deps.ConversationRepository.GetThreadChain(ctx, quotedMsgID, maxHistory)
+	if err != nil {
+		logger.Errorf("Failed to get thread chain: %v", err)
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"Sorry, I encountered an error while retrieving the conversation history.")
+		return
+	}
+
+	// Build message array: system prompt + chain + new user message
+	var messages []domain.ChatMessage
+	if sysPrompt := deps.Config.OpenAISystemPrompt(); sysPrompt != "" {
+		messages = append(messages, domain.ChatMessage{Role: "system", Content: sysPrompt})
+	}
+	messages = append(messages, chain...)
+	messages = append(messages, domain.ChatMessage{Role: "user", Content: msg.Text})
+
+	// Call AI client
+	response, err := deps.AIClient.ChatCompletion(ctx, messages)
+	if err != nil {
+		logger.Errorf("AI completion failed for chat %d: %v", msg.ChatId, err)
+		sendErrorMessage(rpc, logger, accID, msg.ChatId, msgID,
+			"Sorry, I encountered an error while processing your request. Please try again later.")
+		return
+	}
+
+	// Send response as quote-reply
+	responseMsgID, err := rpc.SendMsg(accID, msg.ChatId, deltachat.MsgData{
+		Text:            response,
+		QuotedMessageId: msgID,
+	})
+	if err != nil {
+		logger.Errorf("Failed to send AI response to chat %d: %v", msg.ChatId, err)
+		return
+	}
+
+	// Save both messages to conversation repository
+	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
+	userMsgID := int64(msgID)
+	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
+	assistantMsgID := int64(responseMsgID)
+
+	// Save user message (parent is the quoted message)
+	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, userMsgID, &quotedMsgID, "user", msg.Text); err != nil {
+		logger.Errorf("Failed to save user message: %v", err)
+	}
+
+	// Save assistant message (parent is user message)
+	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, assistantMsgID, &userMsgID, "assistant", response); err != nil {
+		logger.Errorf("Failed to save assistant message: %v", err)
+	}
+}
+
+// handleDMMessage processes a direct message.
+// It checks for /prompt command first, then thread continuation, then falls back to help text.
+func handleDMMessage(rpc rpcClient, logger handlerLogger, accID deltachat.AccountId, msgID deltachat.MsgId, msg *deltachat.MsgSnapshot, deps *domain.Dependencies) {
+	ctx := context.Background()
+
+	// Check for /prompt command
+	cmdType := domain.GetCommandType(msg.Text)
+	if cmdType == domain.CommandPrompt {
+		handlePromptCommand(rpc, logger, accID, msgID, msg, deps)
+		return
+	}
+
+	// Check for thread continuation
+	if isContinuation, threadRootID := isThreadContinuation(ctx, msg, deps); isContinuation {
+		handleThreadContinuation(rpc, logger, accID, msgID, msg, deps, threadRootID)
+		return
+	}
+
+	// Fall back to help text
 	if _, err := rpc.MiscSendTextMessage(accID, msg.ChatId, helpText); err != nil {
 		logger.Errorf("Failed to send help text to chat %d: %v", msg.ChatId, err)
 	}

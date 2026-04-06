@@ -24,6 +24,24 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.MediaPath() != "/data/media" {
 		t.Errorf("MediaPath() = %q, want %q", cfg.MediaPath(), "/data/media")
 	}
+	if cfg.OpenAIBaseURL() != "" {
+		t.Errorf("OpenAIBaseURL() = %q, want %q", cfg.OpenAIBaseURL(), "")
+	}
+	if cfg.OpenAIAPIKey() != "" {
+		t.Errorf("OpenAIAPIKey() = %q, want %q", cfg.OpenAIAPIKey(), "")
+	}
+	if cfg.OpenAIModel() != "gpt-4o-mini" {
+		t.Errorf("OpenAIModel() = %q, want %q", cfg.OpenAIModel(), "gpt-4o-mini")
+	}
+	if cfg.OpenAIMaxHistory() != 50 {
+		t.Errorf("OpenAIMaxHistory() = %d, want %d", cfg.OpenAIMaxHistory(), 50)
+	}
+	if len(cfg.OpenAIAllowedChatIDs()) != 0 {
+		t.Errorf("OpenAIAllowedChatIDs() = %v, want empty", cfg.OpenAIAllowedChatIDs())
+	}
+	if cfg.OpenAISystemPrompt() != "You are a helpful assistant." {
+		t.Errorf("OpenAISystemPrompt() = %q, want %q", cfg.OpenAISystemPrompt(), "You are a helpful assistant.")
+	}
 }
 
 func TestLoad_EnvVarOverride(t *testing.T) {
@@ -31,6 +49,11 @@ func TestLoad_EnvVarOverride(t *testing.T) {
 	_ = os.Setenv("PATRIZIO_DB_PATH", "/custom/db.db")
 	_ = os.Setenv("PATRIZIO_LOG_LEVEL", "debug")
 	_ = os.Setenv("PATRIZIO_MEDIA_PATH", "/custom/media")
+	_ = os.Setenv("PATRIZIO_OPENAI_BASE_URL", "https://api.openai.com/v1")
+	_ = os.Setenv("PATRIZIO_OPENAI_API_KEY", "sk-test-key")
+	_ = os.Setenv("PATRIZIO_OPENAI_MODEL", "gpt-4")
+	_ = os.Setenv("PATRIZIO_OPENAI_MAX_HISTORY", "100")
+	_ = os.Setenv("PATRIZIO_OPENAI_SYSTEM_PROMPT", "You are Patrizio.")
 	defer os.Clearenv()
 
 	cfg, err := Load()
@@ -46,6 +69,21 @@ func TestLoad_EnvVarOverride(t *testing.T) {
 	}
 	if cfg.MediaPath() != "/custom/media" {
 		t.Errorf("MediaPath() = %q, want %q", cfg.MediaPath(), "/custom/media")
+	}
+	if cfg.OpenAIBaseURL() != "https://api.openai.com/v1" {
+		t.Errorf("OpenAIBaseURL() = %q, want %q", cfg.OpenAIBaseURL(), "https://api.openai.com/v1")
+	}
+	if cfg.OpenAIAPIKey() != "sk-test-key" {
+		t.Errorf("OpenAIAPIKey() = %q, want %q", cfg.OpenAIAPIKey(), "sk-test-key")
+	}
+	if cfg.OpenAIModel() != "gpt-4" {
+		t.Errorf("OpenAIModel() = %q, want %q", cfg.OpenAIModel(), "gpt-4")
+	}
+	if cfg.OpenAIMaxHistory() != 100 {
+		t.Errorf("OpenAIMaxHistory() = %d, want %d", cfg.OpenAIMaxHistory(), 100)
+	}
+	if cfg.OpenAISystemPrompt() != "You are Patrizio." {
+		t.Errorf("OpenAISystemPrompt() = %q, want %q", cfg.OpenAISystemPrompt(), "You are Patrizio.")
 	}
 }
 

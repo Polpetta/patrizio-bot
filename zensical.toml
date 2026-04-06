@@ -49,7 +49,8 @@ nav = [
    { "Home" = "index.md" },
    { "User guide" = [
      "user/index.md",
-     { "Filters" = "user/filters.md" }
+     { "Filters" = "user/filters.md" },
+     { "AI Chat" = "user/prompt.md" }
    ]},
    { "Developer Guide" = [
      "dev/index.md",
