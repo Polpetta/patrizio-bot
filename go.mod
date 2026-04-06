@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/chatmail/rpc-client-go v1.2.42
 	github.com/deltachat-bot/deltabot-cli-go v1.2.42
-	github.com/openai/openai-go/v2 v2.7.1
+	github.com/openai/openai-go/v3 v3.30.0
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
@@ -32,7 +32,7 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect

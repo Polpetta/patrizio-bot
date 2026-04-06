@@ -15,6 +15,9 @@ WITH RECURSIVE chain AS (
     FROM conversation_messages cm2
     INNER JOIN chain c ON cm2.msg_id = c.parent_msg_id
 )
-SELECT chain.role, chain.content FROM chain
-ORDER BY chain.id ASC
-LIMIT @max_messages;
+SELECT sub.role, sub.content FROM (
+    SELECT chain.id, chain.role, chain.content FROM chain
+    ORDER BY chain.id DESC
+    LIMIT @max_messages
+) sub
+ORDER BY sub.id ASC;

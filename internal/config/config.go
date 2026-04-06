@@ -3,6 +3,8 @@ package config
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -129,6 +131,17 @@ func Load() (*Config, error) {
 					allowedChatIDs = append(allowedChatIDs, int64(v))
 				case float64:
 					allowedChatIDs = append(allowedChatIDs, int64(v))
+				}
+			}
+		case string:
+			for _, part := range strings.Split(ids, ",") {
+				part = strings.TrimSpace(part)
+				if part == "" {
+					continue
+				}
+				v, err := strconv.ParseInt(part, 10, 64)
+				if err == nil {
+					allowedChatIDs = append(allowedChatIDs, v)
 				}
 			}
 		}

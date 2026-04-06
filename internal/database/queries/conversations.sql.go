@@ -20,9 +20,12 @@ WITH RECURSIVE chain AS (
     FROM conversation_messages cm2
     INNER JOIN chain c ON cm2.msg_id = c.parent_msg_id
 )
-SELECT chain.role, chain.content FROM chain
-ORDER BY chain.id ASC
-LIMIT ?1
+SELECT sub.role, sub.content FROM (
+    SELECT chain.id, chain.role, chain.content FROM chain
+    ORDER BY chain.id DESC
+    LIMIT ?1
+) sub
+ORDER BY sub.id ASC
 `
 
 type GetThreadChainParams struct {

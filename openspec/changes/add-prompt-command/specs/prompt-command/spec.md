@@ -23,7 +23,7 @@ The system SHALL send the user's message along with the conversation thread hist
 - **THEN** the system replies with an error message to the user indicating the request failed, without exposing raw API error details
 
 #### Scenario: Missing configuration
-- **WHEN** a `/prompt` command is received but `openai_base_url` or `openai_api_key` is not configured
+- **WHEN** a `/prompt` command is received but `openai_api_key` is not configured
 - **THEN** the system replies with an error message indicating that the OpenAI integration is not configured
 
 ### Requirement: Reply-chain conversation threading

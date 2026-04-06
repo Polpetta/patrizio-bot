@@ -173,6 +173,14 @@ func TestConversationRepository_GetThreadChain_Limit(t *testing.T) {
 	if len(messages) != 2 {
 		t.Fatalf("Expected 2 messages with limit=2, got %d", len(messages))
 	}
+
+	if messages[0].Role != "user" || messages[0].Content != "Message 3" {
+		t.Errorf("messages[0] = {%q, %q}, want {\"user\", \"Message 3\"}", messages[0].Role, messages[0].Content)
+	}
+
+	if messages[1].Role != "assistant" || messages[1].Content != "Message 4" {
+		t.Errorf("messages[1] = {%q, %q}, want {\"assistant\", \"Message 4\"}", messages[1].Role, messages[1].Content)
+	}
 }
 
 func TestConversationRepository_GetThreadChain_SingleMessage(t *testing.T) {
