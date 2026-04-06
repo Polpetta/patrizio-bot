@@ -33,14 +33,14 @@ When the feature is complete, open a PR against **main** and let the CI run.
 
 ## Code Style & Linting
 
-- **Go** – `golangci-lint` is run by CI. Run locally with:
+- **Go** - `golangci-lint` is run by CI. Run locally with:
 
   ```bash
   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   make lint
   ```
 
-- **Markdown** – `markdownlint` enforces style. Run with:
+- **Markdown** - `markdownlint` enforces style. Run with:
 
   ```bash
   pre-commit run markdownlint --run-all-files

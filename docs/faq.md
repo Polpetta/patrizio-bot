@@ -2,7 +2,7 @@
 icon: lucide/circle-question-mark
 ---
 
-# FAQ – Frequently Asked Questions
+# FAQ - Frequently Asked Questions
 
 ## Why does my filter not trigger?
 

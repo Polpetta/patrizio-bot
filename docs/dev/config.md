@@ -6,10 +6,10 @@ icon: lucide/file-sliders
 
 Patrizio loads configuration from three sources in this precedence order:
 
-1. **Environment variables** – prefixed with `PATRIZIO_` (e.g. `PATRIZIO_DB_PATH`). Override everything else.
-2. **TOML config file** – by default named `patrizio.toml`. Place it in the
+1. **Environment variables** - prefixed with `PATRIZIO_` (e.g. `PATRIZIO_DB_PATH`). Override everything else.
+2. **TOML config file** - by default named `patrizio.toml`. Place it in the
 current directory or `/etc/patrizio/` to persist settings.
-3. **Default values** – set in the application when no file or env var is provided.
+3. **Default values** - set in the application when no file or env var is provided.
 
 The following table lists configuration keys, types, and defaults:
 
@@ -41,7 +41,7 @@ These keys configure the `/prompt` command. The feature is disabled unless `open
 # Default: /data/db/patrizio.db
 db_path = "/var/lib/patrizio/patrizio.db"
 
-# Logging level – one of: debug, info, warn, error
+# Logging level - one of: debug, info, warn, error
 log_level = "debug"
 
 # Directory where media files are stored
@@ -64,7 +64,7 @@ media_path = "/var/lib/patrizio/media"
 # System prompt prepended to every conversation (default: "You are a helpful assistant.")
 #openai_system_prompt = "You are a helpful assistant."
 
-# Chat ID allowlist — if non-empty, only these chats can use /prompt (default: empty = all allowed)
+# Chat ID allowlist - if non-empty, only these chats can use /prompt (default: empty = all allowed)
 #openai_allowed_chat_ids = []
 ```
 

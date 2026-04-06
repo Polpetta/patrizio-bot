@@ -6,7 +6,7 @@ icon: lucide/message-square
 
 The `/prompt` command lets you have conversations with an AI assistant directly inside Delta Chat. It works in both
 group chats and DMs. Each `/prompt` starts a fresh conversation thread, and you can continue chatting by simply
-replying to Patrizio's messages — no need to type `/prompt` again.
+replying to Patrizio's messages - no need to type `/prompt` again.
 
 !!! note
     The `/prompt` command is only available if the bot operator has configured an OpenAI-compatible API. If it hasn't
@@ -35,7 +35,7 @@ Example:
 - You: (reply to Patrizio's message) `What do they eat?`
 - Patrizio: _"Penguins primarily eat fish..."_
 
-You don't need to type `/prompt` again — just reply to any message in the thread.
+You don't need to type `/prompt` again - just reply to any message in the thread.
 
 ### Starting a new conversation
 
