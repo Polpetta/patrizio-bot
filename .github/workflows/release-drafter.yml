@@ -17,3 +17,11 @@ jobs:
       - uses: release-drafter/release-drafter@v7
         with:
           config-name: release-drafter.yml
+  update_prerelease_draft:
+    runs-on: ubuntu-latest
+    name: Update pre-release draft
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          prerelease: true
+          prerelease-identifier: "rc"
