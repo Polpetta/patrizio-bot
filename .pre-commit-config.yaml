@@ -74,7 +74,7 @@ repos:
         entry: hadolint
 
 ci:
-  skip: [golangci-lint, go-build, docker-build, run-tests, hadolint] # These are already covered by `commit.yml` Github Actions
+  skip: [golangci-lint, go-build, docker-build, run-tests, hadolint] # These are already covered by `commit.yml` and `docker.yml` Github Actions
   autofix_commit_msg: |
     fix(lint): apply pre-commit lints
 
