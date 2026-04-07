@@ -69,12 +69,12 @@ repos:
     hooks:
       - id: hadolint
         name: Lint Dockerfiles
-        language: docker_image
+        language: system
         types: ["dockerfile"]
-        entry: ghcr.io/hadolint/hadolint hadolint
+        entry: hadolint
 
 ci:
-  skip: [golangci-lint, go-build, docker-build, run-tests] # These are already covered by `commit.yml` Github Actions
+  skip: [golangci-lint, go-build, docker-build, run-tests, hadolint] # These are already covered by `commit.yml` Github Actions
   autofix_commit_msg: |
     fix(lint): apply pre-commit lints
 
