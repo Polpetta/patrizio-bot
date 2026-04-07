@@ -9,9 +9,8 @@ RUN go mod download
 
 # Copy source and build
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizio
-
-RUN mkdir -p data/db data/media
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizio && \
+    mkdir -p data/db data/media
 
 # Download deltachat-rpc-server from GitHub releases
 FROM alpine:3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS rpc-server
