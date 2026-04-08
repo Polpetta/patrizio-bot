@@ -9,6 +9,7 @@ import (
 	"github.com/deltachat-bot/deltabot-cli-go/botcli"
 	"github.com/spf13/cobra"
 
+	dcadapter "github.com/polpetta/patrizio/internal/adapter/deltachat"
 	oai "github.com/polpetta/patrizio/internal/adapter/openai"
 	"github.com/polpetta/patrizio/internal/adapter/sqlite"
 	"github.com/polpetta/patrizio/internal/adapter/storage"
@@ -24,7 +25,10 @@ func Setup(deps *domain.Dependencies) *botcli.BotCli {
 	cli := botcli.New("patrizio")
 
 	cli.OnBotInit(func(cli *botcli.BotCli, bot *deltachat.Bot, _ *cobra.Command, _ []string) {
-		bot.OnNewMsg(newMsgHandler(cli, bot, deps))
+		deps.DeltaChat = dcadapter.New(bot.Rpc)
+		bot.OnNewMsg(func(_ *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
+			go processMessage(cli.GetLogger(accID), uint64(accID), uint64(msgID), deps)
+		})
 	})
 
 	return cli

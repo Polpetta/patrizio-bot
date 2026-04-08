@@ -40,6 +40,47 @@ type ChatMessage struct {
 	Content string
 }
 
+// ChatType represents the type of a Delta Chat chat.
+type ChatType string
+
+const (
+	// ChatTypeGroup covers group chats, broadcast lists, and mailing lists.
+	ChatTypeGroup ChatType = "group"
+	// ChatTypeSingle covers one-to-one direct message chats.
+	ChatTypeSingle ChatType = "single"
+)
+
+// DownloadState represents the download state of a message's media.
+type DownloadState string
+
+const (
+	// DownloadDone indicates the media has been fully downloaded.
+	DownloadDone DownloadState = "done"
+	// DownloadAvailable indicates the media is available to download but not yet fetched.
+	DownloadAvailable DownloadState = "available"
+)
+
+// LastSpecialContactID is the upper bound for special contacts (system, device, etc.).
+// Messages from contacts with ID <= LastSpecialContactID are ignored.
+const LastSpecialContactID uint64 = 9
+
+// IncomingMessage represents an incoming chat message in domain terms.
+type IncomingMessage struct {
+	ID            uint64
+	ChatID        uint64
+	FromID        uint64
+	Text          string
+	File          string        // local path to attached file, empty if none
+	MediaType     string        // domain media type constant (image/sticker/gif/video), empty if not media
+	DownloadState DownloadState
+	Quote         *QuotedMessage // nil if message is not a reply
+}
+
+// QuotedMessage represents the message being replied to.
+type QuotedMessage struct {
+	MessageID uint64
+}
+
 // FilterResponse represents the response associated with a filter
 type FilterResponse struct {
 	FilterID     int64
