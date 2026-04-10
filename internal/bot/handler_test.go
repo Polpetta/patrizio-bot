@@ -9,82 +9,101 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chatmail/rpc-client-go/deltachat"
-
 	"github.com/polpetta/patrizio/internal/domain"
 )
 
-// --- Mock rpcClient ---
+// --- Mock Messenger ---
 
-type mockRPC struct {
-	// GetMessage
-	getMessageFn func(deltachat.AccountId, deltachat.MsgId) (*deltachat.MsgSnapshot, error)
-	// GetBasicChatInfo
-	getBasicChatInfoFn func(deltachat.AccountId, deltachat.ChatId) (*deltachat.BasicChatSnapshot, error)
-	// MiscSendTextMessage
-	sentMessages []sentMessage
-	sendErr      error
-	// SendMsg
-	sentMsgData []sentMsgDataEntry
-	sendMsgErr  error
+type mockMessenger struct {
+	// FetchMessage
+	fetchMessageFn func(uint64, uint64) (*domain.IncomingMessage, error)
+	// FetchChatType
+	fetchChatTypeFn func(uint64, uint64) (domain.ChatType, error)
+	// SendTextMessage
+	sentTextMessages []sentTextMessageEntry
+	sendTextMessageErr error
+	// SendTextReply
+	sentTextReplies []sentTextReplyEntry
+	sendTextReplyErr error
+	// SendMediaReply
+	sentMediaReplies []sentMediaReplyEntry
+	sendMediaReplyErr error
 	// SendReaction
-	sentReactions []sentReaction
+	sentReactions []sentReactionEntry
 	reactionErr   error
-	// DownloadFullMessage
+	// DownloadMessage
 	downloadCalled bool
 	downloadErr    error
 }
 
-type sentMessage struct {
-	accID  deltachat.AccountId
-	chatID deltachat.ChatId
+type sentTextMessageEntry struct {
+	accID  uint64
+	chatID uint64
 	text   string
 }
 
-type sentReaction struct {
-	accID    deltachat.AccountId
-	msgID    deltachat.MsgId
-	reaction []string
+type sentTextReplyEntry struct {
+	accID  uint64
+	chatID uint64
+	replyTo uint64
+	text   string
 }
 
-type sentMsgDataEntry struct {
-	accID  deltachat.AccountId
-	chatID deltachat.ChatId
-	data   deltachat.MsgData
+type sentMediaReplyEntry struct {
+	accID     uint64
+	chatID    uint64
+	replyTo   uint64
+	filePath  string
+	mediaType string
 }
 
-func (m *mockRPC) GetMessage(accID deltachat.AccountId, msgID deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
-	if m.getMessageFn != nil {
-		return m.getMessageFn(accID, msgID)
+type sentReactionEntry struct {
+	accID    uint64
+	msgID    uint64
+	reaction string
+}
+
+func (m *mockMessenger) FetchMessage(accountID uint64, msgID uint64) (*domain.IncomingMessage, error) {
+	if m.fetchMessageFn != nil {
+		return m.fetchMessageFn(accountID, msgID)
 	}
-	return nil, fmt.Errorf("GetMessage not configured")
+	return nil, fmt.Errorf("FetchMessage not configured")
 }
 
-func (m *mockRPC) GetBasicChatInfo(accID deltachat.AccountId, chatID deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
-	if m.getBasicChatInfoFn != nil {
-		return m.getBasicChatInfoFn(accID, chatID)
+func (m *mockMessenger) FetchChatType(accountID uint64, chatID uint64) (domain.ChatType, error) {
+	if m.fetchChatTypeFn != nil {
+		return m.fetchChatTypeFn(accountID, chatID)
 	}
-	return nil, fmt.Errorf("GetBasicChatInfo not configured")
+	return "", fmt.Errorf("FetchChatType not configured")
 }
 
-func (m *mockRPC) MiscSendTextMessage(accID deltachat.AccountId, chatID deltachat.ChatId, text string) (deltachat.MsgId, error) {
-	m.sentMessages = append(m.sentMessages, sentMessage{accID: accID, chatID: chatID, text: text})
-	return deltachat.MsgId(1), m.sendErr
+func (m *mockMessenger) SendTextMessage(accountID uint64, chatID uint64, text string) error {
+	m.sentTextMessages = append(m.sentTextMessages, sentTextMessageEntry{accID: accountID, chatID: chatID, text: text})
+	return m.sendTextMessageErr
 }
 
-func (m *mockRPC) SendMsg(accID deltachat.AccountId, chatID deltachat.ChatId, data deltachat.MsgData) (deltachat.MsgId, error) {
-	m.sentMsgData = append(m.sentMsgData, sentMsgDataEntry{accID: accID, chatID: chatID, data: data})
-	return deltachat.MsgId(1), m.sendMsgErr
+func (m *mockMessenger) SendTextReply(accountID uint64, chatID uint64, replyTo uint64, text string) (uint64, error) {
+	m.sentTextReplies = append(m.sentTextReplies, sentTextReplyEntry{accID: accountID, chatID: chatID, replyTo: replyTo, text: text})
+	return uint64(1), m.sendTextReplyErr
 }
 
-func (m *mockRPC) SendReaction(accID deltachat.AccountId, msgID deltachat.MsgId, reaction ...string) (deltachat.MsgId, error) {
-	m.sentReactions = append(m.sentReactions, sentReaction{accID: accID, msgID: msgID, reaction: reaction})
-	return deltachat.MsgId(1), m.reactionErr
+func (m *mockMessenger) SendMediaReply(accountID uint64, chatID uint64, replyTo uint64, filePath string, mediaType string) (uint64, error) {
+	m.sentMediaReplies = append(m.sentMediaReplies, sentMediaReplyEntry{accID: accountID, chatID: chatID, replyTo: replyTo, filePath: filePath, mediaType: mediaType})
+	return uint64(1), m.sendMediaReplyErr
 }
 
-func (m *mockRPC) DownloadFullMessage(_ deltachat.AccountId, _ deltachat.MsgId) error {
+func (m *mockMessenger) SendReaction(accountID uint64, msgID uint64, reaction string) error {
+	m.sentReactions = append(m.sentReactions, sentReactionEntry{accID: accountID, msgID: msgID, reaction: reaction})
+	return m.reactionErr
+}
+
+func (m *mockMessenger) DownloadMessage(_ uint64, _ uint64) error {
 	m.downloadCalled = true
 	return m.downloadErr
+}
+
+func (m *mockMessenger) IsSpecialContact(fromID uint64) bool {
+	return fromID <= 9
 }
 
 // --- Mock FilterRepository ---
@@ -328,24 +347,24 @@ func computeSHA512(data []byte) string {
 // --- Tests ---
 
 func TestHandleFilterCommand_TextFilter(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter hello Hi there!",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/filter hello Hi there!",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if !repo.createTextFilterCalled {
 		t.Fatal("expected CreateTextFilter to be called")
@@ -357,37 +376,37 @@ func TestHandleFilterCommand_TextFilter(t *testing.T) {
 		t.Errorf("unexpected triggers: %v", repo.lastTriggers)
 	}
 
-	// Should have sent a confirmation as a quote-reply via SendMsg
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg call (confirmation), got %d", len(rpc.sentMsgData))
+	// Should have sent a confirmation as a quote-reply
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply call (confirmation), got %d", len(mock.sentTextReplies))
 	}
-	if rpc.sentMsgData[0].chatID != 100 {
-		t.Errorf("expected confirmation sent to chat 100, got %d", rpc.sentMsgData[0].chatID)
+	if mock.sentTextReplies[0].chatID != 100 {
+		t.Errorf("expected confirmation sent to chat 100, got %d", mock.sentTextReplies[0].chatID)
 	}
-	if rpc.sentMsgData[0].data.QuotedMessageId != 7 {
-		t.Errorf("expected QuotedMessageId 7, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
+	if mock.sentTextReplies[0].replyTo != 7 {
+		t.Errorf("expected replyTo 7, got %d", mock.sentTextReplies[0].replyTo)
 	}
 }
 
 func TestHandleFilterCommand_ReactionFilter(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter hello react:😂",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/filter hello react:😂",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if !repo.createReactionFilterCalled {
 		t.Fatal("expected CreateReactionFilter to be called")
@@ -406,26 +425,27 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 	mediaPath := writeTempFile(t, mediaContent)
 	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
 	// Message has /filter cat with no text response, but carries an image attachment.
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter cat",
-		ViewType: deltachat.MsgImage,
-		File:     mediaPath,
+	msg := &domain.IncomingMessage{
+		ChatID:    100,
+		FromID:    42,
+		Text:      "/filter cat",
+		MediaType: domain.MediaTypeImage,
+		File:      mediaPath,
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -449,12 +469,12 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 		t.Error("expected media to be saved to storage")
 	}
 
-	// Should have sent a confirmation as a quote-reply via SendMsg
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg call (confirmation), got %d", len(rpc.sentMsgData))
+	// Should have sent a confirmation as a quote-reply
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply call (confirmation), got %d", len(mock.sentTextReplies))
 	}
-	if rpc.sentMsgData[0].data.QuotedMessageId != 7 {
-		t.Errorf("expected QuotedMessageId 7, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
+	if mock.sentTextReplies[0].replyTo != 7 {
+		t.Errorf("expected replyTo 7, got %d", mock.sentTextReplies[0].replyTo)
 	}
 }
 
@@ -465,25 +485,26 @@ func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) 
 	mediaPath := writeTempFile(t, mediaContent)
 	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   200,
-		FromId:   42,
-		Text:     `/filter (cat, dog, "cute animals")`,
-		ViewType: deltachat.MsgImage,
-		File:     mediaPath,
+	msg := &domain.IncomingMessage{
+		ChatID:    200,
+		FromID:    42,
+		Text:      `/filter (cat, dog, "cute animals")`,
+		MediaType: domain.MediaTypeImage,
+		File:      mediaPath,
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -504,41 +525,41 @@ func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 	mediaPath := writeTempFile(t, mediaContent)
 	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
 	// The quoted message returns an image with DownloadDone state
-	rpc.getMessageFn = func(_ deltachat.AccountId, msgID deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+	mock.fetchMessageFn = func(_ uint64, msgID uint64) (*domain.IncomingMessage, error) {
 		if msgID == 999 {
-			return &deltachat.MsgSnapshot{
-				Id:            999,
-				ViewType:      deltachat.MsgImage,
+			return &domain.IncomingMessage{
+				ID:            999,
+				MediaType:     domain.MediaTypeImage,
 				File:          mediaPath,
-				DownloadState: deltachat.DownloadDone,
+				DownloadState: domain.DownloadDone,
 			}, nil
 		}
 		return nil, fmt.Errorf("unexpected msgID %d", msgID)
 	}
 
 	// /filter cat with no text, replying to a media message
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter cat",
-		ViewType: deltachat.MsgText,
-		Quote: &deltachat.MsgQuote{
-			MessageId: 999,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/filter cat",
+		Quote: &domain.QuotedMessage{
+			MessageID: 999,
 		},
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -561,34 +582,35 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 	mediaPath := writeTempFile(t, mediaContent)
 	expectedHash := computeSHA512(mediaContent) + filepath.Ext(mediaPath)
 
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
 	// Quoted message would return a different image, but it should not be used
-	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
-		t.Error("GetMessage should not be called when attachment is present")
+	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+		t.Error("FetchMessage should not be called when attachment is present")
 		return nil, fmt.Errorf("should not be called")
 	}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter cat",
-		ViewType: deltachat.MsgSticker,
-		File:     mediaPath,
-		Quote: &deltachat.MsgQuote{
-			MessageId: 999,
+	msg := &domain.IncomingMessage{
+		ChatID:    100,
+		FromID:    42,
+		Text:      "/filter cat",
+		MediaType: domain.MediaTypeSticker,
+		File:      mediaPath,
+		Quote: &domain.QuotedMessage{
+			MessageID: 999,
 		},
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -605,66 +627,67 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 }
 
 func TestHandleFilterCommand_MediaNoAttachmentNoQuote(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	storage := newMockMediaStorage()
 	logger := &mockLogger{}
 
 	// /filter cat with no text and no media anywhere — should produce an error
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter cat",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/filter cat",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleFilterCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(7), msg, deps)
+	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
 
 	if repo.createMediaFilterCalled || repo.createTextFilterCalled {
 		t.Fatal("no filter should have been created")
 	}
 
-	// Should have sent an error message as a quote-reply via SendMsg
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg call (error message), got %d", len(rpc.sentMsgData))
+	// Should have sent an error message as a quote-reply
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply call (error message), got %d", len(mock.sentTextReplies))
 	}
-	if rpc.sentMsgData[0].data.QuotedMessageId != 7 {
-		t.Errorf("expected QuotedMessageId 7, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
+	if mock.sentTextReplies[0].replyTo != 7 {
+		t.Errorf("expected replyTo 7, got %d", mock.sentTextReplies[0].replyTo)
 	}
 }
 
 func TestHandleDMMessage(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 50,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 50,
+		FromID: 42,
 		Text:   "hey there",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	handleDMMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
+	handleDMMessage(logger, uint64(1), uint64(1), msg, deps)
 
-	if len(rpc.sentMessages) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(rpc.sentMessages))
+	if len(mock.sentTextMessages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(mock.sentTextMessages))
 	}
-	if rpc.sentMessages[0].text != helpText {
-		t.Errorf("expected help text, got %q", rpc.sentMessages[0].text)
+	if mock.sentTextMessages[0].text != helpText {
+		t.Errorf("expected help text, got %q", mock.sentTextMessages[0].text)
 	}
 }
 
 func TestHandleGroupMessage_TextFilterMatch(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{
 		matchingFilters: []domain.FilterResponse{
 			{
@@ -675,30 +698,29 @@ func TestHandleGroupMessage_TextFilterMatch(t *testing.T) {
 	}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "look at these puppies",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "look at these puppies",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(1), msg, deps)
 
-	// Text responses now use SendMsg (with QuotedMessageId) instead of MiscSendTextMessage
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg call, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply call, got %d", len(mock.sentTextReplies))
 	}
-	sent := rpc.sentMsgData[0]
-	if sent.data.Text != "I love puppies!" {
-		t.Errorf("expected text 'I love puppies!', got %q", sent.data.Text)
+	sent := mock.sentTextReplies[0]
+	if sent.text != "I love puppies!" {
+		t.Errorf("expected text 'I love puppies!', got %q", sent.text)
 	}
-	if sent.data.QuotedMessageId != 1 {
-		t.Errorf("expected QuotedMessageId 1, got %d", sent.data.QuotedMessageId)
+	if sent.replyTo != 1 {
+		t.Errorf("expected replyTo 1, got %d", sent.replyTo)
 	}
 	if sent.chatID != 100 {
 		t.Errorf("expected chatID 100, got %d", sent.chatID)
@@ -706,7 +728,7 @@ func TestHandleGroupMessage_TextFilterMatch(t *testing.T) {
 }
 
 func TestHandleGroupMessage_ReactionFilterMatch(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{
 		matchingFilters: []domain.FilterResponse{
 			{
@@ -717,28 +739,28 @@ func TestHandleGroupMessage_ReactionFilterMatch(t *testing.T) {
 	}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "something funny",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "something funny",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(5), msg, deps)
 
-	if len(rpc.sentReactions) != 1 {
-		t.Fatalf("expected 1 reaction, got %d", len(rpc.sentReactions))
+	if len(mock.sentReactions) != 1 {
+		t.Fatalf("expected 1 reaction, got %d", len(mock.sentReactions))
 	}
-	if len(rpc.sentReactions[0].reaction) != 1 || rpc.sentReactions[0].reaction[0] != "😂" {
-		t.Errorf("unexpected reaction: %v", rpc.sentReactions[0].reaction)
+	if mock.sentReactions[0].reaction != "😂" {
+		t.Errorf("unexpected reaction: %v", mock.sentReactions[0].reaction)
 	}
-	if rpc.sentReactions[0].msgID != 5 {
-		t.Errorf("expected reaction on msgID 5, got %d", rpc.sentReactions[0].msgID)
+	if mock.sentReactions[0].msgID != 5 {
+		t.Errorf("expected reaction on msgID 5, got %d", mock.sentReactions[0].msgID)
 	}
 }
 
@@ -748,7 +770,7 @@ func TestHandleGroupMessage_MediaFilterMatch(t *testing.T) {
 	// Pre-populate storage with the media file so Exists returns true
 	storage.saved[mediaHash] = []byte("fake-image-bytes")
 
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{
 		matchingFilters: []domain.FilterResponse{
 			{
@@ -761,39 +783,39 @@ func TestHandleGroupMessage_MediaFilterMatch(t *testing.T) {
 	}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "show me a cat",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "show me a cat",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors: %v", logger.errors)
 	}
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg call, got %d", len(rpc.sentMsgData))
+	if len(mock.sentMediaReplies) != 1 {
+		t.Fatalf("expected 1 SendMediaReply call, got %d", len(mock.sentMediaReplies))
 	}
-	sent := rpc.sentMsgData[0]
+	sent := mock.sentMediaReplies[0]
 	if sent.chatID != 100 {
 		t.Errorf("expected chatID 100, got %d", sent.chatID)
 	}
 	expectedPath := filepath.Join("/mock/media", mediaHash)
-	if sent.data.File != expectedPath {
-		t.Errorf("expected file path %q, got %q", expectedPath, sent.data.File)
+	if sent.filePath != expectedPath {
+		t.Errorf("expected file path %q, got %q", expectedPath, sent.filePath)
 	}
-	if sent.data.ViewType != deltachat.MsgImage {
-		t.Errorf("expected ViewType %q, got %q", deltachat.MsgImage, sent.data.ViewType)
+	if sent.mediaType != domain.MediaTypeImage {
+		t.Errorf("expected mediaType %q, got %q", domain.MediaTypeImage, sent.mediaType)
 	}
-	if sent.data.QuotedMessageId != 10 {
-		t.Errorf("expected QuotedMessageId 10, got %d", sent.data.QuotedMessageId)
+	if sent.replyTo != 10 {
+		t.Errorf("expected replyTo 10, got %d", sent.replyTo)
 	}
 }
 
@@ -802,7 +824,7 @@ func TestHandleGroupMessage_MediaFilterMatch_MissingFile(t *testing.T) {
 	storage := newMockMediaStorage()
 	// Do NOT populate storage — file does not exist
 
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{
 		matchingFilters: []domain.FilterResponse{
 			{
@@ -815,23 +837,23 @@ func TestHandleGroupMessage_MediaFilterMatch_MissingFile(t *testing.T) {
 	}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "show me a cat",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "show me a cat",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
+		Messenger:        mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
 
 	// Should have logged an error, not sent anything
-	if len(rpc.sentMsgData) != 0 {
-		t.Errorf("expected no SendMsg calls, got %d", len(rpc.sentMsgData))
+	if len(mock.sentMediaReplies) != 0 {
+		t.Errorf("expected no SendMediaReply calls, got %d", len(mock.sentMediaReplies))
 	}
 	if len(logger.errors) == 0 {
 		t.Error("expected an error to be logged for missing media file")
@@ -839,23 +861,23 @@ func TestHandleGroupMessage_MediaFilterMatch_MissingFile(t *testing.T) {
 }
 
 func TestHandleGroupMessage_CommandRouting(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId:   100,
-		FromId:   42,
-		Text:     "/filter hello world response text",
-		ViewType: deltachat.MsgText,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/filter hello world response text",
 	}
 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(1), msg, deps)
 
 	// The /filter command should have been processed, creating a text filter
 	if !repo.createTextFilterCalled {
@@ -866,14 +888,14 @@ func TestHandleGroupMessage_CommandRouting(t *testing.T) {
 func TestConvertChatID(t *testing.T) {
 	tests := []struct {
 		name    string
-		chatID  deltachat.ChatId
+		chatID  uint64
 		want    int64
 		wantErr bool
 	}{
 		{name: "zero", chatID: 0, want: 0},
 		{name: "normal", chatID: 100, want: 100},
-		{name: "max int64", chatID: deltachat.ChatId(1<<63 - 1), want: 1<<63 - 1},
-		{name: "overflow", chatID: deltachat.ChatId(1 << 63), wantErr: true},
+		{name: "max int64", chatID: uint64(1<<63 - 1), want: 1<<63 - 1},
+		{name: "overflow", chatID: uint64(1 << 63), wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -904,12 +926,12 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 		systemPrompt:     "You are a helpful assistant.",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt What is the capital of France?",
 	}
 
@@ -919,9 +941,10 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	// Verify AI was called with system prompt + user message
 	if !aiClient.called {
@@ -938,14 +961,14 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 	}
 
 	// Verify response was sent as quote-reply
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg call, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply call, got %d", len(mock.sentTextReplies))
 	}
-	if rpc.sentMsgData[0].data.Text != "Paris is the capital of France." {
-		t.Errorf("expected AI response text, got %q", rpc.sentMsgData[0].data.Text)
+	if mock.sentTextReplies[0].text != "Paris is the capital of France." {
+		t.Errorf("expected AI response text, got %q", mock.sentTextReplies[0].text)
 	}
-	if rpc.sentMsgData[0].data.QuotedMessageId != 10 {
-		t.Errorf("expected QuotedMessageId 10, got %d", rpc.sentMsgData[0].data.QuotedMessageId)
+	if mock.sentTextReplies[0].replyTo != 10 {
+		t.Errorf("expected replyTo 10, got %d", mock.sentTextReplies[0].replyTo)
 	}
 
 	// Verify both messages were saved
@@ -957,7 +980,7 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 	if userMsg.threadRootID != 10 || userMsg.msgID != 10 || userMsg.parentMsgID != nil || userMsg.role != "user" {
 		t.Errorf("unexpected user message: %+v", userMsg)
 	}
-	// Assistant message: thread_root=10, msg_id=1 (from mockRPC), parent=10, role=assistant
+	// Assistant message: thread_root=10, msg_id=1 (from mockMessenger), parent=10, role=assistant
 	assistantMsg := convRepo.savedMessages[1]
 	if assistantMsg.threadRootID != 10 || assistantMsg.role != "assistant" {
 		t.Errorf("unexpected assistant message: %+v", assistantMsg)
@@ -974,12 +997,12 @@ func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
 		systemPrompt:     "",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Hello",
 	}
 
@@ -989,9 +1012,10 @@ func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	// Without system prompt, only 1 message should be sent
 	if len(aiClient.lastMessages) != 1 {
@@ -1003,12 +1027,12 @@ func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
 }
 
 func TestHandlePromptCommand_Unconfigured(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Hello",
 	}
 
@@ -1017,15 +1041,16 @@ func TestHandlePromptCommand_Unconfigured(t *testing.T) {
 		MediaStorage:     newMockMediaStorage(),
 		AIClient:         nil, // Not configured
 		Config:           &mockConfig{},
+		Messenger:        mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	// Should send error about unconfigured AI
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(mock.sentTextReplies))
 	}
-	if rpc.sentMsgData[0].data.Text == "" {
+	if mock.sentTextReplies[0].text == "" {
 		t.Error("expected non-empty error message")
 	}
 }
@@ -1037,12 +1062,12 @@ func TestHandlePromptCommand_APIError(t *testing.T) {
 		systemPrompt:     "You are helpful.",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Hello",
 	}
 
@@ -1052,13 +1077,14 @@ func TestHandlePromptCommand_APIError(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	// Should send an error message to user
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(mock.sentTextReplies))
 	}
 	// No messages should be saved on error
 	if len(convRepo.savedMessages) != 0 {
@@ -1071,12 +1097,12 @@ func TestHandlePromptCommand_AllowlistDenied(t *testing.T) {
 	cfg := &mockConfig{
 		allowedChatIDs: []int64{200, 300}, // Chat 100 is NOT in the list
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Hello",
 	}
 
@@ -1086,17 +1112,18 @@ func TestHandlePromptCommand_AllowlistDenied(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	// AI should NOT be called
 	if aiClient.called {
 		t.Fatal("AI client should not be called for denied chat")
 	}
 	// Should send "not authorized" error
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(mock.sentTextReplies))
 	}
 }
 
@@ -1106,12 +1133,12 @@ func TestHandlePromptCommand_AllowlistAllowed(t *testing.T) {
 		allowedChatIDs:   []int64{100, 200},
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Hello",
 	}
 
@@ -1121,9 +1148,10 @@ func TestHandlePromptCommand_AllowlistAllowed(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("AI client should be called for allowed chat")
@@ -1136,12 +1164,12 @@ func TestHandlePromptCommand_EmptyAllowlist(t *testing.T) {
 		allowedChatIDs:   nil, // Empty = allow all
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Hello",
 	}
 
@@ -1151,9 +1179,10 @@ func TestHandlePromptCommand_EmptyAllowlist(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handlePromptCommand(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("AI client should be called when allowlist is empty")
@@ -1177,15 +1206,15 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 		systemPrompt:     "You are helpful.",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "Tell me more about Go",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 6, // Quoting a Patrizio message
+		Quote: &domain.QuotedMessage{
+			MessageID: 6, // Quoting a Patrizio message
 		},
 	}
 
@@ -1195,9 +1224,10 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handleThreadContinuation(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps, threadRoot)
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot)
 
 	// Verify AI was called with system + chain + new user message
 	if !aiClient.called {
@@ -1215,11 +1245,11 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 	}
 
 	// Verify response sent
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 SendMsg, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply, got %d", len(mock.sentTextReplies))
 	}
-	if rpc.sentMsgData[0].data.Text != "Here's more detail." {
-		t.Errorf("expected AI response, got %q", rpc.sentMsgData[0].data.Text)
+	if mock.sentTextReplies[0].text != "Here's more detail." {
+		t.Errorf("expected AI response, got %q", mock.sentTextReplies[0].text)
 	}
 
 	// Verify both messages saved
@@ -1237,8 +1267,8 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 }
 
 func TestIsThreadContinuation_NoQuote(t *testing.T) {
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
 		Text:   "Just a normal message",
 	}
 
@@ -1257,11 +1287,11 @@ func TestIsThreadContinuation_NonConversationQuote(t *testing.T) {
 		isConvMsgExists: false, // Quoted message is NOT a conversation message
 	}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
 		Text:   "Replying to something else",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 999,
+		Quote: &domain.QuotedMessage{
+			MessageID: 999,
 		},
 	}
 
@@ -1276,11 +1306,11 @@ func TestIsThreadContinuation_NonConversationQuote(t *testing.T) {
 }
 
 func TestIsThreadContinuation_NilRepo(t *testing.T) {
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
 		Text:   "Some message",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 5,
+		Quote: &domain.QuotedMessage{
+			MessageID: 5,
 		},
 	}
 
@@ -1295,15 +1325,15 @@ func TestIsThreadContinuation_NilRepo(t *testing.T) {
 }
 
 func TestHandleThreadContinuation_Unconfigured(t *testing.T) {
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "Continue thread",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 5,
+		Quote: &domain.QuotedMessage{
+			MessageID: 5,
 		},
 	}
 
@@ -1313,13 +1343,14 @@ func TestHandleThreadContinuation_Unconfigured(t *testing.T) {
 		AIClient:               nil, // Not configured
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 &mockConfig{},
+		Messenger:              mock,
 	}
 
-	handleThreadContinuation(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps, 5)
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5)
 
 	// Should send error about unconfigured AI
-	if len(rpc.sentMsgData) != 1 {
-		t.Fatalf("expected 1 error message, got %d", len(rpc.sentMsgData))
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(mock.sentTextReplies))
 	}
 }
 
@@ -1328,15 +1359,15 @@ func TestHandleThreadContinuation_AllowlistDenied(t *testing.T) {
 	cfg := &mockConfig{
 		allowedChatIDs: []int64{200}, // Chat 100 NOT allowed
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "Continue",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 5,
+		Quote: &domain.QuotedMessage{
+			MessageID: 5,
 		},
 	}
 
@@ -1346,9 +1377,10 @@ func TestHandleThreadContinuation_AllowlistDenied(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handleThreadContinuation(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps, 5)
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5)
 
 	if aiClient.called {
 		t.Fatal("AI client should not be called for denied chat")
@@ -1364,12 +1396,12 @@ func TestHandleDMMessage_PromptCommand(t *testing.T) {
 		systemPrompt:     "Be helpful",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 50,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 50,
+		FromID: 42,
 		Text:   "/prompt Hello from DM",
 	}
 
@@ -1379,16 +1411,17 @@ func TestHandleDMMessage_PromptCommand(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handleDMMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(1), msg, deps)
+	handleDMMessage(logger, uint64(1), uint64(1), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for /prompt in DM")
 	}
 	// Should NOT have sent help text
-	if len(rpc.sentMessages) != 0 {
-		t.Errorf("expected no MiscSendTextMessage calls, got %d", len(rpc.sentMessages))
+	if len(mock.sentTextMessages) != 0 {
+		t.Errorf("expected no SendTextMessage calls, got %d", len(mock.sentTextMessages))
 	}
 }
 
@@ -1407,15 +1440,15 @@ func TestHandleDMMessage_ThreadContinuation(t *testing.T) {
 		systemPrompt:     "Be helpful",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 50,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 50,
+		FromID: 42,
 		Text:   "Follow up in DM",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 6,
+		Quote: &domain.QuotedMessage{
+			MessageID: 6,
 		},
 	}
 
@@ -1425,16 +1458,17 @@ func TestHandleDMMessage_ThreadContinuation(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handleDMMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps)
+	handleDMMessage(logger, uint64(1), uint64(20), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for thread continuation in DM")
 	}
 	// Should NOT have sent help text
-	if len(rpc.sentMessages) != 0 {
-		t.Errorf("expected no MiscSendTextMessage calls, got %d", len(rpc.sentMessages))
+	if len(mock.sentTextMessages) != 0 {
+		t.Errorf("expected no SendTextMessage calls, got %d", len(mock.sentTextMessages))
 	}
 }
 
@@ -1447,12 +1481,12 @@ func TestHandleGroupMessage_PromptCommand(t *testing.T) {
 		systemPrompt:     "You are helpful.",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "/prompt Tell me a joke",
 	}
 
@@ -1462,9 +1496,10 @@ func TestHandleGroupMessage_PromptCommand(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(10), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for /prompt in group")
@@ -1486,16 +1521,16 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 		systemPrompt:     "Be helpful",
 		openAIMaxHistory: 50,
 	}
-	rpc := &mockRPC{}
+	mock := &mockMessenger{}
 	repo := &mockFilterRepository{}
 	logger := &mockLogger{}
 
-	msg := &deltachat.MsgSnapshot{
-		ChatId: 100,
-		FromId: 42,
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
 		Text:   "Continue the thread",
-		Quote: &deltachat.MsgQuote{
-			MessageId: 6,
+		Quote: &domain.QuotedMessage{
+			MessageID: 6,
 		},
 	}
 
@@ -1505,9 +1540,10 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
+		Messenger:              mock,
 	}
 
-	handleGroupMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(20), msg, deps)
+	handleGroupMessage(logger, uint64(1), uint64(20), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for thread continuation in group")
@@ -1520,54 +1556,54 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 
 // --- processMessage Tests ---
 
-// makeGroupRPC returns a mockRPC configured to successfully return a regular-user message
-// in the given chat type, suitable for processMessage tests.
-func makeGroupRPC(msgFromID deltachat.ContactId, chatType deltachat.ChatType) *mockRPC {
-	rpc := &mockRPC{}
-	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
-		return &deltachat.MsgSnapshot{
-			Id:       1,
-			ChatId:   100,
-			FromId:   msgFromID,
-			Text:     "hello",
-			ViewType: deltachat.MsgText,
+// makeGroupMessenger returns a mockMessenger configured to successfully return a regular-user
+// message in the given chat type, suitable for processMessage tests.
+func makeGroupMessenger(msgFromID uint64, chatType domain.ChatType) *mockMessenger {
+	mock := &mockMessenger{}
+	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+		return &domain.IncomingMessage{
+			ID:     1,
+			ChatID: 100,
+			FromID: msgFromID,
+			Text:   "hello",
 		}, nil
 	}
-	rpc.getBasicChatInfoFn = func(_ deltachat.AccountId, _ deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
-		return &deltachat.BasicChatSnapshot{ChatType: chatType}, nil
+	mock.fetchChatTypeFn = func(_ uint64, _ uint64) (domain.ChatType, error) {
+		return chatType, nil
 	}
-	return rpc
+	return mock
 }
 
 func TestProcessMessage_GetMessageError(t *testing.T) {
-	rpc := &mockRPC{}
-	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
+	mock := &mockMessenger{}
+	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
 		return nil, fmt.Errorf("rpc down")
 	}
 	logger := &mockLogger{}
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+	processMessage(logger, uint64(1), uint64(5), deps)
 
 	if len(logger.errors) == 0 {
-		t.Error("expected an error to be logged when GetMessage fails")
+		t.Error("expected an error to be logged when FetchMessage fails")
 	}
-	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
-		t.Error("expected no RPC send calls when GetMessage fails")
+	if len(mock.sentTextMessages) != 0 || len(mock.sentTextReplies) != 0 || len(mock.sentMediaReplies) != 0 || len(mock.sentReactions) != 0 {
+		t.Error("expected no send calls when FetchMessage fails")
 	}
 }
 
 func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
-	// deltachat.ContactLastSpecial == 9, so use FromId = 5 (special).
-	rpc := &mockRPC{}
-	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
-		return &deltachat.MsgSnapshot{
-			Id:     1,
-			ChatId: 100,
-			FromId: deltachat.ContactLastSpecial, // special
+	// The mock's IsSpecialContact returns true for fromID <= 9; use 9 to exercise that path.
+	mock := &mockMessenger{}
+	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+		return &domain.IncomingMessage{
+			ID:     1,
+			ChatID: 100,
+			FromID: 9, // special contact boundary
 			Text:   "system message",
 		}, nil
 	}
@@ -1575,48 +1611,50 @@ func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+	processMessage(logger, uint64(1), uint64(5), deps)
 
 	if len(logger.errors) != 0 {
 		t.Errorf("expected no errors, got: %v", logger.errors)
 	}
-	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+	if len(mock.sentTextMessages) != 0 || len(mock.sentTextReplies) != 0 || len(mock.sentMediaReplies) != 0 || len(mock.sentReactions) != 0 {
 		t.Error("expected no send calls for special-contact message")
 	}
-	// GetBasicChatInfo should NOT have been called.
-	// We verify indirectly: getBasicChatInfoFn is nil, so if it were called it would
+	// FetchChatType should NOT have been called.
+	// We verify indirectly: fetchChatTypeFn is nil, so if it were called it would
 	// return an error which would appear in logger.errors.
 }
 
 func TestProcessMessage_GetChatInfoError(t *testing.T) {
-	rpc := &mockRPC{}
-	rpc.getMessageFn = func(_ deltachat.AccountId, _ deltachat.MsgId) (*deltachat.MsgSnapshot, error) {
-		return &deltachat.MsgSnapshot{Id: 1, ChatId: 100, FromId: 42, Text: "hi"}, nil
+	mock := &mockMessenger{}
+	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+		return &domain.IncomingMessage{ID: 1, ChatID: 100, FromID: 42, Text: "hi"}, nil
 	}
-	rpc.getBasicChatInfoFn = func(_ deltachat.AccountId, _ deltachat.ChatId) (*deltachat.BasicChatSnapshot, error) {
-		return nil, fmt.Errorf("chat info unavailable")
+	mock.fetchChatTypeFn = func(_ uint64, _ uint64) (domain.ChatType, error) {
+		return "", fmt.Errorf("chat info unavailable")
 	}
 	logger := &mockLogger{}
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+	processMessage(logger, uint64(1), uint64(5), deps)
 
 	if len(logger.errors) == 0 {
-		t.Error("expected an error to be logged when GetBasicChatInfo fails")
+		t.Error("expected an error to be logged when FetchChatType fails")
 	}
-	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
-		t.Error("expected no send calls when GetBasicChatInfo fails")
+	if len(mock.sentTextMessages) != 0 || len(mock.sentTextReplies) != 0 || len(mock.sentMediaReplies) != 0 || len(mock.sentReactions) != 0 {
+		t.Error("expected no send calls when FetchChatType fails")
 	}
 }
 
 func TestProcessMessage_RoutesGroupChat(t *testing.T) {
-	// Use a regular user FromId (> ContactLastSpecial == 9).
-	rpc := makeGroupRPC(42, deltachat.ChatGroup)
+	// Use a regular user FromID (> LastSpecialContactID == 9).
+	mock := makeGroupMessenger(42, domain.ChatTypeGroup)
 	logger := &mockLogger{}
 	repo := &mockFilterRepository{
 		matchingFilters: []domain.FilterResponse{
@@ -1626,12 +1664,13 @@ func TestProcessMessage_RoutesGroupChat(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+	processMessage(logger, uint64(1), uint64(5), deps)
 
 	// handleGroupMessage was reached: it tried filter matching and sent a response.
-	if len(rpc.sentMsgData) == 0 {
+	if len(mock.sentTextReplies) == 0 {
 		t.Error("expected group handler to be invoked and send a response")
 	}
 	if len(logger.errors) != 0 {
@@ -1640,38 +1679,40 @@ func TestProcessMessage_RoutesGroupChat(t *testing.T) {
 }
 
 func TestProcessMessage_RoutesSingleChat(t *testing.T) {
-	rpc := makeGroupRPC(42, deltachat.ChatSingle)
+	mock := makeGroupMessenger(42, domain.ChatTypeSingle)
 	logger := &mockLogger{}
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+	processMessage(logger, uint64(1), uint64(5), deps)
 
-	// handleDMMessage was reached: it sends the help text via MiscSendTextMessage.
-	if len(rpc.sentMessages) == 0 {
+	// handleDMMessage was reached: it sends the help text via SendTextMessage.
+	if len(mock.sentTextMessages) == 0 {
 		t.Error("expected DM handler to be invoked and send help text")
 	}
-	if rpc.sentMessages[0].text != helpText {
-		t.Errorf("expected help text, got %q", rpc.sentMessages[0].text)
+	if mock.sentTextMessages[0].text != helpText {
+		t.Errorf("expected help text, got %q", mock.sentTextMessages[0].text)
 	}
 }
 
 func TestProcessMessage_UnknownChatTypeWarns(t *testing.T) {
-	rpc := makeGroupRPC(42, deltachat.ChatType("Unknown"))
+	mock := makeGroupMessenger(42, domain.ChatType("Unknown"))
 	logger := &mockLogger{}
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
+		Messenger:        mock,
 	}
 
-	processMessage(rpc, logger, deltachat.AccountId(1), deltachat.MsgId(5), deps)
+	processMessage(logger, uint64(1), uint64(5), deps)
 
 	if len(logger.warns) == 0 {
 		t.Error("expected a warning to be logged for unknown chat type")
 	}
-	if len(rpc.sentMessages) != 0 || len(rpc.sentMsgData) != 0 || len(rpc.sentReactions) != 0 {
+	if len(mock.sentTextMessages) != 0 || len(mock.sentTextReplies) != 0 || len(mock.sentMediaReplies) != 0 || len(mock.sentReactions) != 0 {
 		t.Error("expected no send calls for unknown chat type")
 	}
 }
