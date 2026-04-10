@@ -48,6 +48,8 @@ const (
 	ChatTypeGroup ChatType = "group"
 	// ChatTypeSingle covers one-to-one direct message chats.
 	ChatTypeSingle ChatType = "single"
+	// ChatTypeUnknown is returned by adapters for chat types not recognised by the domain.
+	ChatTypeUnknown ChatType = "unknown"
 )
 
 // DownloadState represents the download state of a message's media.
@@ -59,10 +61,6 @@ const (
 	// DownloadAvailable indicates the media is available to download but not yet fetched.
 	DownloadAvailable DownloadState = "available"
 )
-
-// LastSpecialContactID is the upper bound for special contacts (system, device, etc.).
-// Messages from contacts with ID <= LastSpecialContactID are ignored.
-const LastSpecialContactID uint64 = 9
 
 // IncomingMessage represents an incoming chat message in domain terms.
 type IncomingMessage struct {

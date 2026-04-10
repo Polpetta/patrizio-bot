@@ -58,7 +58,7 @@ func (m *Messenger) FetchChatType(accountID uint64, chatID uint64) (domain.ChatT
 	case dc.ChatSingle:
 		return domain.ChatTypeSingle, nil
 	default:
-		return "", fmt.Errorf("unknown chat type: %s", info.ChatType)
+		return domain.ChatTypeUnknown, nil
 	}
 }
 
@@ -108,6 +108,15 @@ func (m *Messenger) SendTextMessage(accountID uint64, chatID uint64, text string
 // DownloadMessage downloads the full media content of a message.
 func (m *Messenger) DownloadMessage(accountID uint64, msgID uint64) error {
 	return m.rpc.DownloadFullMessage(dc.AccountId(accountID), dc.MsgId(msgID))
+}
+
+// lastSpecialContactID is the upper bound for Delta Chat's reserved/system contact IDs.
+// Contacts with ID <= this value are system accounts (self, device-chat, info bot, etc.).
+const lastSpecialContactID uint64 = 9
+
+// IsSpecialContact reports whether the given contact ID is a system/device contact.
+func (m *Messenger) IsSpecialContact(fromID uint64) bool {
+	return fromID <= lastSpecialContactID
 }
 
 // mapViewTypeToMediaType maps Delta Chat view types to domain media type constants.

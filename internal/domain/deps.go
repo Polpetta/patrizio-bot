@@ -7,5 +7,5 @@ type Dependencies struct {
 	Config                 Config
 	AIClient               AIClient
 	ConversationRepository ConversationRepository
-	DeltaChat              Messenger
+	Messenger              Messenger
 }

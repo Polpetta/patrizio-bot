@@ -57,6 +57,9 @@ type Messenger interface {
 	SendTextMessage(accountID uint64, chatID uint64, text string) error
 	// DownloadMessage downloads a message's full media content.
 	DownloadMessage(accountID uint64, msgID uint64) error
+	// IsSpecialContact reports whether the given contact ID is a system/device contact
+	// that should be ignored by the bot (e.g. self, device-chat, info bot).
+	IsSpecialContact(fromID uint64) bool
 }
 
 // ConversationRepository defines database operations for conversation threads.

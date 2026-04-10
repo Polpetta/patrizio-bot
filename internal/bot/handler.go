@@ -79,26 +79,26 @@ func convertChatID(chatID uint64) (int64, error) {
 }
 
 // processMessage contains the core per-message routing logic.
-// It is extracted from the newMsgHandler goroutine so it can be called
-// synchronously in tests without depending on *botcli.BotCli.
+// It is called by the bot.OnNewMsg callback configured in bot.Setup and is
+// kept separate so it can be invoked synchronously in tests.
 func processMessage(
 	logger handlerLogger,
 	accID uint64,
 	msgID uint64,
 	deps *domain.Dependencies,
 ) {
-	msg, err := deps.DeltaChat.FetchMessage(accID, msgID)
+	msg, err := deps.Messenger.FetchMessage(accID, msgID)
 	if err != nil {
 		logger.Errorf("Failed to get message %d: %v", msgID, err)
 		return
 	}
 
 	// Ignore messages from special contacts (system, device, etc.).
-	if msg.FromID <= domain.LastSpecialContactID {
+	if deps.Messenger.IsSpecialContact(msg.FromID) {
 		return
 	}
 
-	chatType, err := deps.DeltaChat.FetchChatType(accID, msg.ChatID)
+	chatType, err := deps.Messenger.FetchChatType(accID, msg.ChatID)
 	if err != nil {
 		logger.Errorf("Failed to get chat info for chat %d: %v", msg.ChatID, err)
 		return
@@ -177,7 +177,7 @@ func handleGroupMessage(
 		switch filter.ResponseType {
 		case domain.ResponseTypeText:
 			// Send text response as a quote-reply to the triggering message
-			if _, err := deps.DeltaChat.SendTextReply(accID, msg.ChatID, msgID, filter.ResponseText); err != nil {
+			if _, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, filter.ResponseText); err != nil {
 				logger.Errorf("Failed to send text response to chat %d: %v", msg.ChatID, err)
 				continue
 			}
@@ -192,14 +192,14 @@ func handleGroupMessage(
 			}
 
 			// Send the media message as a quote-reply to the triggering message
-			if _, err = deps.DeltaChat.SendMediaReply(accID, msg.ChatID, msgID, mediaPath, filter.MediaType); err != nil {
+			if _, err = deps.Messenger.SendMediaReply(accID, msg.ChatID, msgID, mediaPath, filter.MediaType); err != nil {
 				logger.Errorf("Failed to send media response to chat %d: %v", msg.ChatID, err)
 				continue
 			}
 
 		case domain.ResponseTypeReaction:
 			// Send reaction to the triggering message
-			if err := deps.DeltaChat.SendReaction(accID, msgID, filter.Reaction); err != nil {
+			if err := deps.Messenger.SendReaction(accID, msgID, filter.Reaction); err != nil {
 				logger.Errorf("Failed to send reaction %s to message %d: %v", filter.Reaction, msgID, err)
 				continue
 			}
@@ -219,7 +219,7 @@ func sendErrorMessage(
 	replyTo uint64,
 	message string,
 ) {
-	if _, err := deps.DeltaChat.SendTextReply(accID, chatID, replyTo, message); err != nil {
+	if _, err := deps.Messenger.SendTextReply(accID, chatID, replyTo, message); err != nil {
 		logger.Errorf("Failed to send error message to chat %d: %v", chatID, err)
 	}
 }
@@ -233,7 +233,7 @@ func sendConfirmation(
 	replyTo uint64,
 	message string,
 ) {
-	if _, err := deps.DeltaChat.SendTextReply(accID, chatID, replyTo, message); err != nil {
+	if _, err := deps.Messenger.SendTextReply(accID, chatID, replyTo, message); err != nil {
 		logger.Errorf("Failed to send confirmation to chat %d: %v", chatID, err)
 	}
 }
@@ -345,14 +345,14 @@ func downloadMediaIfNeeded(
 	}
 
 	// Try to download it
-	if err := deps.DeltaChat.DownloadMessage(accID, quotedMsgID); err != nil {
+	if err := deps.Messenger.DownloadMessage(accID, quotedMsgID); err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to download media: %v", err)
 		sendErrorMessage(deps, logger, accID, chatID, replyTo, errMsg)
 		return nil, err
 	}
 
 	// Re-fetch the message after download
-	updatedMsg, err := deps.DeltaChat.FetchMessage(accID, quotedMsgID)
+	updatedMsg, err := deps.Messenger.FetchMessage(accID, quotedMsgID)
 	if err != nil || updatedMsg.DownloadState != domain.DownloadDone {
 		sendErrorMessage(deps, logger, accID, chatID, replyTo, "❌ Media download incomplete. Please try again in a moment.")
 		return nil, fmt.Errorf("download incomplete")
@@ -424,7 +424,7 @@ func handleMediaFilterCreation(
 	if hasAttachedMedia {
 		mediaMsg = msg
 	} else {
-		quotedMsg, err := deps.DeltaChat.FetchMessage(accID, msg.Quote.MessageID)
+		quotedMsg, err := deps.Messenger.FetchMessage(accID, msg.Quote.MessageID)
 		if err != nil {
 			errMsg := fmt.Sprintf("❌ Failed to get quoted message: %v", err)
 			sendErrorMessage(deps, logger, accID, msg.ChatID, replyTo, errMsg)
@@ -757,7 +757,7 @@ func handlePromptCommand(
 	}
 
 	// Send response as quote-reply
-	responseMsgID, err := deps.DeltaChat.SendTextReply(accID, msg.ChatID, msgID, response)
+	responseMsgID, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, response)
 	if err != nil {
 		logger.Errorf("Failed to send AI response to chat %d: %v", msg.ChatID, err)
 		return
@@ -844,7 +844,7 @@ func handleThreadContinuation(
 	}
 
 	// Send response as quote-reply
-	responseMsgID, err := deps.DeltaChat.SendTextReply(accID, msg.ChatID, msgID, response)
+	responseMsgID, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, response)
 	if err != nil {
 		logger.Errorf("Failed to send AI response to chat %d: %v", msg.ChatID, err)
 		return
@@ -886,7 +886,7 @@ func handleDMMessage(logger handlerLogger, accID uint64, msgID uint64, msg *doma
 	}
 
 	// Fall back to help text
-	if err := deps.DeltaChat.SendTextMessage(accID, msg.ChatID, helpText); err != nil {
+	if err := deps.Messenger.SendTextMessage(accID, msg.ChatID, helpText); err != nil {
 		logger.Errorf("Failed to send help text to chat %d: %v", msg.ChatID, err)
 	}
 }

@@ -102,6 +102,10 @@ func (m *mockMessenger) DownloadMessage(_ uint64, _ uint64) error {
 	return m.downloadErr
 }
 
+func (m *mockMessenger) IsSpecialContact(fromID uint64) bool {
+	return fromID <= 9
+}
+
 // --- Mock FilterRepository ---
 
 type mockFilterRepository struct {
@@ -357,7 +361,7 @@ func TestHandleFilterCommand_TextFilter(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -399,7 +403,7 @@ func TestHandleFilterCommand_ReactionFilter(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -438,7 +442,7 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -497,7 +501,7 @@ func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) 
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -552,7 +556,7 @@ func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -603,7 +607,7 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -638,7 +642,7 @@ func TestHandleFilterCommand_MediaNoAttachmentNoQuote(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
@@ -669,7 +673,7 @@ func TestHandleDMMessage(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleDMMessage(logger, uint64(1), uint64(1), msg, deps)
@@ -703,7 +707,7 @@ func TestHandleGroupMessage_TextFilterMatch(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(1), msg, deps)
@@ -744,7 +748,7 @@ func TestHandleGroupMessage_ReactionFilterMatch(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(5), msg, deps)
@@ -788,7 +792,7 @@ func TestHandleGroupMessage_MediaFilterMatch(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
@@ -842,7 +846,7 @@ func TestHandleGroupMessage_MediaFilterMatch_MissingFile(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     storage,
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
@@ -870,7 +874,7 @@ func TestHandleGroupMessage_CommandRouting(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(1), msg, deps)
@@ -937,7 +941,7 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1008,7 +1012,7 @@ func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1037,7 +1041,7 @@ func TestHandlePromptCommand_Unconfigured(t *testing.T) {
 		MediaStorage:     newMockMediaStorage(),
 		AIClient:         nil, // Not configured
 		Config:           &mockConfig{},
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1073,7 +1077,7 @@ func TestHandlePromptCommand_APIError(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1108,7 +1112,7 @@ func TestHandlePromptCommand_AllowlistDenied(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1144,7 +1148,7 @@ func TestHandlePromptCommand_AllowlistAllowed(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1175,7 +1179,7 @@ func TestHandlePromptCommand_EmptyAllowlist(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
@@ -1220,7 +1224,7 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot)
@@ -1339,7 +1343,7 @@ func TestHandleThreadContinuation_Unconfigured(t *testing.T) {
 		AIClient:               nil, // Not configured
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 &mockConfig{},
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5)
@@ -1373,7 +1377,7 @@ func TestHandleThreadContinuation_AllowlistDenied(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: &mockConversationRepo{},
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5)
@@ -1407,7 +1411,7 @@ func TestHandleDMMessage_PromptCommand(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleDMMessage(logger, uint64(1), uint64(1), msg, deps)
@@ -1454,7 +1458,7 @@ func TestHandleDMMessage_ThreadContinuation(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleDMMessage(logger, uint64(1), uint64(20), msg, deps)
@@ -1492,7 +1496,7 @@ func TestHandleGroupMessage_PromptCommand(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
@@ -1536,7 +1540,7 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 		AIClient:               aiClient,
 		ConversationRepository: convRepo,
 		Config:                 cfg,
-		DeltaChat:              mock,
+		Messenger:              mock,
 	}
 
 	handleGroupMessage(logger, uint64(1), uint64(20), msg, deps)
@@ -1579,7 +1583,7 @@ func TestProcessMessage_GetMessageError(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	processMessage(logger, uint64(1), uint64(5), deps)
@@ -1593,13 +1597,13 @@ func TestProcessMessage_GetMessageError(t *testing.T) {
 }
 
 func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
-	// domain.LastSpecialContactID == 9, so use FromID = 9 (special).
+	// The mock's IsSpecialContact returns true for fromID <= 9; use 9 to exercise that path.
 	mock := &mockMessenger{}
 	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
 		return &domain.IncomingMessage{
 			ID:     1,
 			ChatID: 100,
-			FromID: domain.LastSpecialContactID, // special
+			FromID: 9, // special contact boundary
 			Text:   "system message",
 		}, nil
 	}
@@ -1607,7 +1611,7 @@ func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	processMessage(logger, uint64(1), uint64(5), deps)
@@ -1635,7 +1639,7 @@ func TestProcessMessage_GetChatInfoError(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	processMessage(logger, uint64(1), uint64(5), deps)
@@ -1660,7 +1664,7 @@ func TestProcessMessage_RoutesGroupChat(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: repo,
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	processMessage(logger, uint64(1), uint64(5), deps)
@@ -1680,7 +1684,7 @@ func TestProcessMessage_RoutesSingleChat(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	processMessage(logger, uint64(1), uint64(5), deps)
@@ -1700,7 +1704,7 @@ func TestProcessMessage_UnknownChatTypeWarns(t *testing.T) {
 	deps := &domain.Dependencies{
 		FilterRepository: &mockFilterRepository{},
 		MediaStorage:     newMockMediaStorage(),
-		DeltaChat:        mock,
+		Messenger:        mock,
 	}
 
 	processMessage(logger, uint64(1), uint64(5), deps)

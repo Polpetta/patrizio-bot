@@ -25,7 +25,7 @@ func Setup(deps *domain.Dependencies) *botcli.BotCli {
 	cli := botcli.New("patrizio")
 
 	cli.OnBotInit(func(cli *botcli.BotCli, bot *deltachat.Bot, _ *cobra.Command, _ []string) {
-		deps.DeltaChat = dcadapter.New(bot.Rpc)
+		deps.Messenger = dcadapter.New(bot.Rpc)
 		bot.OnNewMsg(func(_ *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
 			go processMessage(cli.GetLogger(accID), uint64(accID), uint64(msgID), deps)
 		})
