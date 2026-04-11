@@ -12,16 +12,16 @@ import (
 
 const getThreadChain = `-- name: GetThreadChain :many
 WITH RECURSIVE chain AS (
-    SELECT cm.id, cm.thread_root_id, cm.msg_id, cm.parent_msg_id, cm.role, cm.content, cm.created_at
+    SELECT cm.id, cm.thread_root_id, cm.msg_id, cm.parent_msg_id, cm.role, cm.content, cm.sender_name, cm.created_at
     FROM conversation_messages cm
     WHERE cm.msg_id = ?2
     UNION ALL
-    SELECT cm2.id, cm2.thread_root_id, cm2.msg_id, cm2.parent_msg_id, cm2.role, cm2.content, cm2.created_at
+    SELECT cm2.id, cm2.thread_root_id, cm2.msg_id, cm2.parent_msg_id, cm2.role, cm2.content, cm2.sender_name, cm2.created_at
     FROM conversation_messages cm2
     INNER JOIN chain c ON cm2.msg_id = c.parent_msg_id
 )
-SELECT sub.role, sub.content FROM (
-    SELECT chain.id, chain.role, chain.content FROM chain
+SELECT sub.role, sub.content, sub.sender_name FROM (
+    SELECT chain.id, chain.role, chain.content, chain.sender_name FROM chain
     ORDER BY chain.id DESC
     LIMIT ?1
 ) sub
@@ -34,8 +34,9 @@ type GetThreadChainParams struct {
 }
 
 type GetThreadChainRow struct {
-	Role    string
-	Content string
+	Role       string
+	Content    string
+	SenderName string
 }
 
 func (q *Queries) GetThreadChain(ctx context.Context, arg GetThreadChainParams) ([]GetThreadChainRow, error) {
@@ -47,7 +48,7 @@ func (q *Queries) GetThreadChain(ctx context.Context, arg GetThreadChainParams) 
 	var items []GetThreadChainRow
 	for rows.Next() {
 		var i GetThreadChainRow
-		if err := rows.Scan(&i.Role, &i.Content); err != nil {
+		if err := rows.Scan(&i.Role, &i.Content, &i.SenderName); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -62,8 +63,8 @@ func (q *Queries) GetThreadChain(ctx context.Context, arg GetThreadChainParams) 
 }
 
 const insertConversationMessage = `-- name: InsertConversationMessage :exec
-INSERT INTO conversation_messages (thread_root_id, msg_id, parent_msg_id, role, content)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO conversation_messages (thread_root_id, msg_id, parent_msg_id, role, content, sender_name)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type InsertConversationMessageParams struct {
@@ -72,6 +73,7 @@ type InsertConversationMessageParams struct {
 	ParentMsgID  sql.NullInt64
 	Role         string
 	Content      string
+	SenderName   string
 }
 
 func (q *Queries) InsertConversationMessage(ctx context.Context, arg InsertConversationMessageParams) error {
@@ -81,6 +83,7 @@ func (q *Queries) InsertConversationMessage(ctx context.Context, arg InsertConve
 		arg.ParentMsgID,
 		arg.Role,
 		arg.Content,
+		arg.SenderName,
 	)
 	return err
 }

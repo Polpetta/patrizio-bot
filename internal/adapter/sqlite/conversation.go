@@ -23,12 +23,13 @@ func NewConversationRepository(db *sql.DB) *ConversationRepository {
 }
 
 // SaveMessage persists a conversation message to the database.
-func (r *ConversationRepository) SaveMessage(ctx context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string) error {
+func (r *ConversationRepository) SaveMessage(ctx context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string, senderName string) error {
 	params := queries.InsertConversationMessageParams{
 		ThreadRootID: threadRootID,
 		MsgID:        msgID,
 		Role:         role,
 		Content:      content,
+		SenderName:   senderName,
 	}
 
 	if parentMsgID != nil {
@@ -57,6 +58,7 @@ func (r *ConversationRepository) GetThreadChain(ctx context.Context, leafMsgID i
 	for i, row := range rows {
 		messages[i] = domain.ChatMessage{
 			Role:    row.Role,
+			Name:    row.SenderName,
 			Content: row.Content,
 		}
 	}

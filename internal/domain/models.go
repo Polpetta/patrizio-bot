@@ -37,6 +37,7 @@ type FilterTrigger struct {
 // ChatMessage represents a single message in a conversation thread.
 type ChatMessage struct {
 	Role    string
+	Name    string // sender display name; empty for system/assistant and DMs
 	Content string
 }
 

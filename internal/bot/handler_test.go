@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/polpetta/patrizio/internal/domain"
@@ -19,14 +20,16 @@ type mockMessenger struct {
 	fetchMessageFn func(uint64, uint64) (*domain.IncomingMessage, error)
 	// FetchChatType
 	fetchChatTypeFn func(uint64, uint64) (domain.ChatType, error)
+	// FetchContactDisplayName
+	fetchContactDisplayNameFn func(uint64, uint64) (string, error)
 	// SendTextMessage
-	sentTextMessages []sentTextMessageEntry
+	sentTextMessages   []sentTextMessageEntry
 	sendTextMessageErr error
 	// SendTextReply
-	sentTextReplies []sentTextReplyEntry
+	sentTextReplies  []sentTextReplyEntry
 	sendTextReplyErr error
 	// SendMediaReply
-	sentMediaReplies []sentMediaReplyEntry
+	sentMediaReplies  []sentMediaReplyEntry
 	sendMediaReplyErr error
 	// SendReaction
 	sentReactions []sentReactionEntry
@@ -104,6 +107,13 @@ func (m *mockMessenger) DownloadMessage(_ uint64, _ uint64) error {
 
 func (m *mockMessenger) IsSpecialContact(fromID uint64) bool {
 	return fromID <= 9
+}
+
+func (m *mockMessenger) FetchContactDisplayName(accountID uint64, contactID uint64) (string, error) {
+	if m.fetchContactDisplayNameFn != nil {
+		return m.fetchContactDisplayNameFn(accountID, contactID)
+	}
+	return "", nil
 }
 
 // --- Mock FilterRepository ---
@@ -281,15 +291,17 @@ type savedConversationMessage struct {
 	parentMsgID  *int64
 	role         string
 	content      string
+	senderName   string
 }
 
-func (m *mockConversationRepo) SaveMessage(_ context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string) error {
+func (m *mockConversationRepo) SaveMessage(_ context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string, senderName string) error {
 	m.savedMessages = append(m.savedMessages, savedConversationMessage{
 		threadRootID: threadRootID,
 		msgID:        msgID,
 		parentMsgID:  parentMsgID,
 		role:         role,
 		content:      content,
+		senderName:   senderName,
 	})
 	return m.saveErr
 }
@@ -944,7 +956,7 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	// Verify AI was called with system prompt + user message
 	if !aiClient.called {
@@ -1015,7 +1027,7 @@ func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	// Without system prompt, only 1 message should be sent
 	if len(aiClient.lastMessages) != 1 {
@@ -1044,7 +1056,7 @@ func TestHandlePromptCommand_Unconfigured(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	// Should send error about unconfigured AI
 	if len(mock.sentTextReplies) != 1 {
@@ -1080,7 +1092,7 @@ func TestHandlePromptCommand_APIError(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	// Should send an error message to user
 	if len(mock.sentTextReplies) != 1 {
@@ -1115,7 +1127,7 @@ func TestHandlePromptCommand_AllowlistDenied(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	// AI should NOT be called
 	if aiClient.called {
@@ -1151,7 +1163,7 @@ func TestHandlePromptCommand_AllowlistAllowed(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	if !aiClient.called {
 		t.Fatal("AI client should be called for allowed chat")
@@ -1182,7 +1194,7 @@ func TestHandlePromptCommand_EmptyAllowlist(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps)
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
 
 	if !aiClient.called {
 		t.Fatal("AI client should be called when allowlist is empty")
@@ -1227,7 +1239,7 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot)
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot, domain.ChatTypeSingle)
 
 	// Verify AI was called with system + chain + new user message
 	if !aiClient.called {
@@ -1346,7 +1358,7 @@ func TestHandleThreadContinuation_Unconfigured(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5)
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5, domain.ChatTypeSingle)
 
 	// Should send error about unconfigured AI
 	if len(mock.sentTextReplies) != 1 {
@@ -1380,7 +1392,7 @@ func TestHandleThreadContinuation_AllowlistDenied(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5)
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5, domain.ChatTypeSingle)
 
 	if aiClient.called {
 		t.Fatal("AI client should not be called for denied chat")
@@ -1714,5 +1726,249 @@ func TestProcessMessage_UnknownChatTypeWarns(t *testing.T) {
 	}
 	if len(mock.sentTextMessages) != 0 || len(mock.sentTextReplies) != 0 || len(mock.sentMediaReplies) != 0 || len(mock.sentReactions) != 0 {
 		t.Error("expected no send calls for unknown chat type")
+	}
+}
+
+// --- Group Identity Tests ---
+
+func TestHandlePromptCommand_GroupChat_WithDisplayName(t *testing.T) {
+	aiClient := &mockAIClient{response: "Here's a joke!"}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "You are helpful.",
+		openAIMaxHistory: 50,
+	}
+	mock := &mockMessenger{
+		fetchContactDisplayNameFn: func(_ uint64, _ uint64) (string, error) {
+			return "Mario Rossi", nil
+		},
+	}
+	logger := &mockLogger{}
+
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/prompt Tell me a joke",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+		Messenger:              mock,
+	}
+
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeGroup)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called")
+	}
+
+	// System prompt must include group info
+	if aiClient.lastMessages[0].Role != "system" {
+		t.Errorf("expected first message to be system, got %q", aiClient.lastMessages[0].Role)
+	}
+	if !strings.Contains(aiClient.lastMessages[0].Content, "<general_group_chat_information>") {
+		t.Error("expected system prompt to contain group information block")
+	}
+
+	// User message must be prefixed and carry Name field
+	userMsg := aiClient.lastMessages[1]
+	if userMsg.Role != "user" {
+		t.Errorf("expected user message, got %q", userMsg.Role)
+	}
+	if userMsg.Name != "Mario Rossi" {
+		t.Errorf("expected Name = %q, got %q", "Mario Rossi", userMsg.Name)
+	}
+	if userMsg.Content != "[Mario Rossi]: Tell me a joke" {
+		t.Errorf("expected prefixed content, got %q", userMsg.Content)
+	}
+
+	// Saved user message must carry senderName and prefixed content
+	if len(convRepo.savedMessages) != 2 {
+		t.Fatalf("expected 2 saved messages, got %d", len(convRepo.savedMessages))
+	}
+	saved := convRepo.savedMessages[0]
+	if saved.senderName != "Mario Rossi" {
+		t.Errorf("expected saved senderName %q, got %q", "Mario Rossi", saved.senderName)
+	}
+	if saved.content != "[Mario Rossi]: Tell me a joke" {
+		t.Errorf("expected saved content %q, got %q", "[Mario Rossi]: Tell me a joke", saved.content)
+	}
+	// Assistant message should have empty senderName
+	if convRepo.savedMessages[1].senderName != "" {
+		t.Errorf("expected empty senderName for assistant message, got %q", convRepo.savedMessages[1].senderName)
+	}
+}
+
+func TestHandlePromptCommand_GroupChat_DisplayNameFetchError(t *testing.T) {
+	aiClient := &mockAIClient{response: "OK"}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{openAIMaxHistory: 50}
+	mock := &mockMessenger{
+		fetchContactDisplayNameFn: func(_ uint64, _ uint64) (string, error) {
+			return "", fmt.Errorf("contact not found")
+		},
+	}
+	logger := &mockLogger{}
+
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/prompt Hello",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+		Messenger:              mock,
+	}
+
+	// Should not crash; falls back to no name
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeGroup)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called despite name fetch failure")
+	}
+	// Should have logged a warning
+	if len(logger.warns) == 0 {
+		t.Error("expected warning to be logged for name fetch failure")
+	}
+	// User message should have no Name and no prefix
+	userMsg := aiClient.lastMessages[len(aiClient.lastMessages)-1]
+	if userMsg.Name != "" {
+		t.Errorf("expected empty Name on fallback, got %q", userMsg.Name)
+	}
+	if userMsg.Content != "Hello" {
+		t.Errorf("expected unmodified content on fallback, got %q", userMsg.Content)
+	}
+}
+
+func TestHandlePromptCommand_DM_NoNameNoPrefix(t *testing.T) {
+	aiClient := &mockAIClient{response: "OK"}
+	convRepo := &mockConversationRepo{}
+	cfg := &mockConfig{
+		systemPrompt:     "Be helpful.",
+		openAIMaxHistory: 50,
+	}
+	mock := &mockMessenger{}
+	logger := &mockLogger{}
+
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 42,
+		Text:   "/prompt Hello from DM",
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+		Messenger:              mock,
+	}
+
+	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called")
+	}
+	// System prompt must NOT have group info
+	if aiClient.lastMessages[0].Role == "system" {
+		if strings.Contains(aiClient.lastMessages[0].Content, "<general_group_chat_information>") {
+			t.Error("DM system prompt must not contain group information block")
+		}
+	}
+	// User message must have no Name and no prefix
+	userMsg := aiClient.lastMessages[len(aiClient.lastMessages)-1]
+	if userMsg.Name != "" {
+		t.Errorf("expected empty Name in DM, got %q", userMsg.Name)
+	}
+	if userMsg.Content != "Hello from DM" {
+		t.Errorf("expected unmodified content in DM, got %q", userMsg.Content)
+	}
+}
+
+func TestHandleThreadContinuation_GroupChat_WithDisplayName(t *testing.T) {
+	threadRoot := int64(5)
+	aiClient := &mockAIClient{response: "Great response!"}
+	convRepo := &mockConversationRepo{
+		isConvMsgExists:     true,
+		isConvMsgThreadRoot: &threadRoot,
+		threadChain: []domain.ChatMessage{
+			{Role: "user", Name: "Mario Rossi", Content: "[Mario Rossi]: What is Go?"},
+			{Role: "assistant", Content: "Go is a programming language."},
+		},
+	}
+	cfg := &mockConfig{
+		systemPrompt:     "Be helpful.",
+		openAIMaxHistory: 50,
+	}
+	mock := &mockMessenger{
+		fetchContactDisplayNameFn: func(_ uint64, _ uint64) (string, error) {
+			return "Luigi Verdi", nil
+		},
+	}
+	logger := &mockLogger{}
+
+	msg := &domain.IncomingMessage{
+		ChatID: 100,
+		FromID: 99,
+		Text:   "Tell me more",
+		Quote: &domain.QuotedMessage{MessageID: 6},
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository:       &mockFilterRepository{},
+		MediaStorage:           newMockMediaStorage(),
+		AIClient:               aiClient,
+		ConversationRepository: convRepo,
+		Config:                 cfg,
+		Messenger:              mock,
+	}
+
+	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot, domain.ChatTypeGroup)
+
+	if !aiClient.called {
+		t.Fatal("expected AI client to be called")
+	}
+
+	// Verify system prompt has group info
+	if aiClient.lastMessages[0].Role != "system" {
+		t.Errorf("expected system message first, got %q", aiClient.lastMessages[0].Role)
+	}
+	if !strings.Contains(aiClient.lastMessages[0].Content, "<general_group_chat_information>") {
+		t.Error("expected group information in system prompt")
+	}
+
+	// Historical messages from chain should be passed through unchanged
+	if aiClient.lastMessages[1].Name != "Mario Rossi" {
+		t.Errorf("expected historical message to carry Name %q, got %q", "Mario Rossi", aiClient.lastMessages[1].Name)
+	}
+
+	// New user message should have Luigi's name and prefixed content
+	newMsg := aiClient.lastMessages[len(aiClient.lastMessages)-1]
+	if newMsg.Name != "Luigi Verdi" {
+		t.Errorf("expected Name = %q, got %q", "Luigi Verdi", newMsg.Name)
+	}
+	if newMsg.Content != "[Luigi Verdi]: Tell me more" {
+		t.Errorf("expected prefixed content, got %q", newMsg.Content)
+	}
+
+	// Verify saved messages
+	if len(convRepo.savedMessages) != 2 {
+		t.Fatalf("expected 2 saved messages, got %d", len(convRepo.savedMessages))
+	}
+	if convRepo.savedMessages[0].senderName != "Luigi Verdi" {
+		t.Errorf("expected senderName %q saved, got %q", "Luigi Verdi", convRepo.savedMessages[0].senderName)
+	}
+	if convRepo.savedMessages[1].senderName != "" {
+		t.Errorf("expected empty senderName for assistant, got %q", convRepo.savedMessages[1].senderName)
 	}
 }

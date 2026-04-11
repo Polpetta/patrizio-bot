@@ -119,6 +119,22 @@ func (m *Messenger) IsSpecialContact(fromID uint64) bool {
 	return fromID <= lastSpecialContactID
 }
 
+// FetchContactDisplayName retrieves the display name for a contact.
+// Falls back to the contact's name, then email address if display name is empty.
+func (m *Messenger) FetchContactDisplayName(accountID uint64, contactID uint64) (string, error) {
+	contact, err := m.rpc.GetContact(dc.AccountId(accountID), dc.ContactId(contactID))
+	if err != nil {
+		return "", err
+	}
+	if contact.DisplayName != "" {
+		return contact.DisplayName, nil
+	}
+	if contact.Name != "" {
+		return contact.Name, nil
+	}
+	return contact.Address, nil
+}
+
 // mapViewTypeToMediaType maps Delta Chat view types to domain media type constants.
 func mapViewTypeToMediaType(viewType dc.MsgType) string {
 	switch viewType {

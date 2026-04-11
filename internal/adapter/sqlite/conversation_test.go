@@ -13,14 +13,14 @@ func TestConversationRepository_SaveMessage(t *testing.T) {
 	ctx := context.Background()
 
 	// Save a root message (no parent)
-	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "Hello, AI!")
+	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "Hello, AI!", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	// Save a reply (with parent)
 	parentID := int64(100)
-	err = repo.SaveMessage(ctx, 100, 101, &parentID, "assistant", "Hello! How can I help?")
+	err = repo.SaveMessage(ctx, 100, 101, &parentID, "assistant", "Hello! How can I help?", "")
 	if err != nil {
 		t.Fatalf("SaveMessage with parent failed: %v", err)
 	}
@@ -33,13 +33,13 @@ func TestConversationRepository_SaveMessage_DuplicateMsgID(t *testing.T) {
 	repo := NewConversationRepository(db)
 	ctx := context.Background()
 
-	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "First message")
+	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "First message", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	// Saving with the same msg_id should fail (UNIQUE constraint)
-	err = repo.SaveMessage(ctx, 100, 100, nil, "user", "Duplicate message")
+	err = repo.SaveMessage(ctx, 100, 100, nil, "user", "Duplicate message", "")
 	if err == nil {
 		t.Fatal("Expected error for duplicate msg_id, got nil")
 	}
@@ -65,7 +65,7 @@ func TestConversationRepository_IsConversationMessage(t *testing.T) {
 	}
 
 	// Save a message and check it
-	err = repo.SaveMessage(ctx, 100, 200, nil, "user", "Test message")
+	err = repo.SaveMessage(ctx, 100, 200, nil, "user", "Test message", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
@@ -94,19 +94,19 @@ func TestConversationRepository_GetThreadChain(t *testing.T) {
 
 	// Build a 3-message chain:
 	// msg 100 (user) -> msg 101 (assistant) -> msg 102 (user)
-	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "What is Go?")
+	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "What is Go?", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	parent1 := int64(100)
-	err = repo.SaveMessage(ctx, 100, 101, &parent1, "assistant", "Go is a programming language.")
+	err = repo.SaveMessage(ctx, 100, 101, &parent1, "assistant", "Go is a programming language.", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	parent2 := int64(101)
-	err = repo.SaveMessage(ctx, 100, 102, &parent2, "user", "Tell me more.")
+	err = repo.SaveMessage(ctx, 100, 102, &parent2, "user", "Tell me more.", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
@@ -141,25 +141,25 @@ func TestConversationRepository_GetThreadChain_Limit(t *testing.T) {
 	ctx := context.Background()
 
 	// Build a 4-message chain
-	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "Message 1")
+	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "Message 1", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	parent := int64(100)
-	err = repo.SaveMessage(ctx, 100, 101, &parent, "assistant", "Message 2")
+	err = repo.SaveMessage(ctx, 100, 101, &parent, "assistant", "Message 2", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	parent = int64(101)
-	err = repo.SaveMessage(ctx, 100, 102, &parent, "user", "Message 3")
+	err = repo.SaveMessage(ctx, 100, 102, &parent, "user", "Message 3", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
 
 	parent = int64(102)
-	err = repo.SaveMessage(ctx, 100, 103, &parent, "assistant", "Message 4")
+	err = repo.SaveMessage(ctx, 100, 103, &parent, "assistant", "Message 4", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestConversationRepository_GetThreadChain_SingleMessage(t *testing.T) {
 	ctx := context.Background()
 
 	// Save a single root message
-	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "Just one message")
+	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "Just one message", "")
 	if err != nil {
 		t.Fatalf("SaveMessage failed: %v", err)
 	}
@@ -225,5 +225,50 @@ func TestConversationRepository_GetThreadChain_NonExistentMessage(t *testing.T) 
 
 	if len(messages) != 0 {
 		t.Errorf("Expected 0 messages for non-existent leaf, got %d", len(messages))
+	}
+}
+
+func TestConversationRepository_GetThreadChain_WithSenderName(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	repo := NewConversationRepository(db)
+	ctx := context.Background()
+
+	// Build a 3-message chain with sender names
+	err := repo.SaveMessage(ctx, 100, 100, nil, "user", "[Mario Rossi]: Hello!", "Mario Rossi")
+	if err != nil {
+		t.Fatalf("SaveMessage failed: %v", err)
+	}
+
+	parent1 := int64(100)
+	err = repo.SaveMessage(ctx, 100, 101, &parent1, "assistant", "Hi there!", "")
+	if err != nil {
+		t.Fatalf("SaveMessage failed: %v", err)
+	}
+
+	parent2 := int64(101)
+	err = repo.SaveMessage(ctx, 100, 102, &parent2, "user", "[Luigi Verdi]: How are you?", "Luigi Verdi")
+	if err != nil {
+		t.Fatalf("SaveMessage failed: %v", err)
+	}
+
+	messages, err := repo.GetThreadChain(ctx, 102, 50)
+	if err != nil {
+		t.Fatalf("GetThreadChain failed: %v", err)
+	}
+
+	if len(messages) != 3 {
+		t.Fatalf("Expected 3 messages, got %d", len(messages))
+	}
+
+	if messages[0].Name != "Mario Rossi" {
+		t.Errorf("messages[0].Name = %q, want %q", messages[0].Name, "Mario Rossi")
+	}
+	if messages[1].Name != "" {
+		t.Errorf("messages[1].Name = %q, want empty (assistant)", messages[1].Name)
+	}
+	if messages[2].Name != "Luigi Verdi" {
+		t.Errorf("messages[2].Name = %q, want %q", messages[2].Name, "Luigi Verdi")
 	}
 }

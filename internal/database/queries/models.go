@@ -17,6 +17,7 @@ type ConversationMessage struct {
 	Role         string
 	Content      string
 	CreatedAt    time.Time
+	SenderName   string
 }
 
 type Filter struct {

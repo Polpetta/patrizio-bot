@@ -60,11 +60,14 @@ type Messenger interface {
 	// IsSpecialContact reports whether the given contact ID is a system/device contact
 	// that should be ignored by the bot (e.g. self, device-chat, info bot).
 	IsSpecialContact(fromID uint64) bool
+	// FetchContactDisplayName retrieves the display name for a contact.
+	// Falls back to the contact's name, then email address if display name is empty.
+	FetchContactDisplayName(accountID uint64, contactID uint64) (string, error)
 }
 
 // ConversationRepository defines database operations for conversation threads.
 type ConversationRepository interface {
-	SaveMessage(ctx context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string) error
+	SaveMessage(ctx context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string, senderName string) error
 	GetThreadChain(ctx context.Context, leafMsgID int64, limit int) ([]ChatMessage, error)
 	IsConversationMessage(ctx context.Context, msgID int64) (bool, *int64, error)
 }
