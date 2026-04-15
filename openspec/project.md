@@ -5,8 +5,8 @@ Patrizio is a Delta Chat bot written in Go that responds to incoming messages in
 
 ## Tech Stack
 - **Language:** Go (1.25+)
-- **Bot framework:** `github.com/deltachat-bot/deltabot-cli-go/botcli` -- CLI scaffolding, bot lifecycle hooks (`OnBotInit`, `OnBotStart`), and logging
-- **Delta Chat client:** `github.com/chatmail/rpc-client-go/deltachat` -- Go bindings for the Delta Chat RPC API
+- **Bot framework:** `github.com/deltachat-bot/deltabot-cli-go/v2/botcli` -- CLI scaffolding, bot lifecycle hooks (`OnBotInit`, `OnBotStart`), and logging
+- **Delta Chat client:** `github.com/chatmail/rpc-client-go/v2/deltachat` -- Go bindings for the Delta Chat RPC API
 - **CLI framework:** `github.com/spf13/cobra` (used transitively via deltabot-cli-go)
 - **Configuration:** `github.com/spf13/viper` -- env vars prefixed `PATRIZIO_`
 - **Database:** SQLite via `modernc.org/sqlite` (pure Go, no CGO)
