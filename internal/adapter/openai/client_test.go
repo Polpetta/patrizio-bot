@@ -202,9 +202,9 @@ func TestClient_ChatCompletion_UserMessageWithName(t *testing.T) {
 	}
 
 	m, _ := receivedMessages[0].(map[string]interface{})
-	name, _ := m["name"].(string)
-	if name != "Mario Rossi" {
-		t.Errorf("message name = %q, want %q", name, "Mario Rossi")
+	// name field must not be sent to avoid OpenAI API format restrictions
+	if _, ok := m["name"]; ok {
+		t.Errorf("expected no 'name' field in request, but it was present")
 	}
 	content, _ := m["content"].(string)
 	if content != "[Mario Rossi]: Tell me a joke" {

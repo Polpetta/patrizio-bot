@@ -8,7 +8,6 @@ import (
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
-	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/polpetta/patrizio/internal/domain"
 )
 
@@ -72,18 +71,7 @@ func toSDKMessages(messages []domain.ChatMessage) []openai.ChatCompletionMessage
 		case "system":
 			sdkMsgs = append(sdkMsgs, openai.SystemMessage(msg.Content))
 		case "user":
-			if msg.Name != "" {
-				sdkMsgs = append(sdkMsgs, openai.ChatCompletionMessageParamUnion{
-					OfUser: &openai.ChatCompletionUserMessageParam{
-						Content: openai.ChatCompletionUserMessageParamContentUnion{
-							OfString: param.NewOpt(msg.Content),
-						},
-						Name: param.NewOpt(msg.Name),
-					},
-				})
-			} else {
-				sdkMsgs = append(sdkMsgs, openai.UserMessage(msg.Content))
-			}
+			sdkMsgs = append(sdkMsgs, openai.UserMessage(msg.Content))
 		case "assistant":
 			sdkMsgs = append(sdkMsgs, openai.AssistantMessage(msg.Content))
 		}
