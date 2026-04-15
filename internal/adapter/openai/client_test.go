@@ -173,6 +173,79 @@ func TestClient_ChatCompletion_EmptyContent(t *testing.T) {
 	}
 }
 
+func TestClient_ChatCompletion_UserMessageWithName(t *testing.T) {
+	var receivedMessages []interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		receivedMessages, _ = body["messages"].([]interface{})
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fakeCompletionResponse("OK")))
+	}))
+	defer server.Close()
+
+	client := New("test-key", server.URL, "test-model")
+
+	messages := []domain.ChatMessage{
+		{Role: "user", Name: "Mario Rossi", Content: "[Mario Rossi]: Tell me a joke"},
+	}
+
+	_, err := client.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		t.Fatalf("ChatCompletion failed: %v", err)
+	}
+
+	if len(receivedMessages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(receivedMessages))
+	}
+
+	m, _ := receivedMessages[0].(map[string]interface{})
+	// name field must not be sent to avoid OpenAI API format restrictions
+	if _, ok := m["name"]; ok {
+		t.Errorf("expected no 'name' field in request, but it was present")
+	}
+	content, _ := m["content"].(string)
+	if content != "[Mario Rossi]: Tell me a joke" {
+		t.Errorf("message content = %q, want %q", content, "[Mario Rossi]: Tell me a joke")
+	}
+}
+
+func TestClient_ChatCompletion_UserMessageWithoutName(t *testing.T) {
+	var receivedMessages []interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		receivedMessages, _ = body["messages"].([]interface{})
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fakeCompletionResponse("OK")))
+	}))
+	defer server.Close()
+
+	client := New("test-key", server.URL, "test-model")
+
+	messages := []domain.ChatMessage{
+		{Role: "user", Content: "Hello"},
+	}
+
+	_, err := client.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		t.Fatalf("ChatCompletion failed: %v", err)
+	}
+
+	if len(receivedMessages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(receivedMessages))
+	}
+
+	m, _ := receivedMessages[0].(map[string]interface{})
+	if _, hasName := m["name"]; hasName {
+		t.Error("expected no 'name' field for user message without Name set")
+	}
+}
+
 func TestClient_ChatCompletion_MessageRoles(t *testing.T) {
 	var receivedMessages []interface{}
 

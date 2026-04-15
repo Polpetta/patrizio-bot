@@ -143,14 +143,14 @@ func handleGroupMessage(
 			handleFiltersCommand(logger, accID, msgID, msg, deps)
 			return
 		case domain.CommandPrompt:
-			handlePromptCommand(logger, accID, msgID, msg, deps)
+			handlePromptCommand(logger, accID, msgID, msg, deps, domain.ChatTypeGroup)
 			return
 		}
 	}
 
 	// Check for thread continuation (reply to a Patrizio conversation message)
 	if isContinuation, threadRootID := isThreadContinuation(ctx, msg, deps); isContinuation {
-		handleThreadContinuation(logger, accID, msgID, msg, deps, threadRootID)
+		handleThreadContinuation(logger, accID, msgID, msg, deps, threadRootID, domain.ChatTypeGroup)
 		return
 	}
 
@@ -711,6 +711,7 @@ func handlePromptCommand(
 	msgID uint64,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
+	chatType domain.ChatType,
 ) {
 	ctx := context.Background()
 
@@ -740,12 +741,33 @@ func handlePromptCommand(
 		return
 	}
 
-	// Build message array: system prompt (if set) + user message
+	// In group chats, resolve sender display name and prefix content
+	var senderName string
+	displayContent := promptText
+	if chatType == domain.ChatTypeGroup {
+		name, nameErr := deps.Messenger.FetchContactDisplayName(accID, msg.FromID)
+		if nameErr != nil {
+			logger.Warnf("Failed to fetch display name for contact %d: %v", msg.FromID, nameErr)
+		} else {
+			senderName = name
+		}
+		if senderName != "" {
+			displayContent = fmt.Sprintf("[%s]: %s", senderName, promptText)
+		}
+	}
+
+	// Build message array: system prompt (if set) + group info (if group) + user message
 	var messages []domain.ChatMessage
-	if sysPrompt := deps.Config.OpenAISystemPrompt(); sysPrompt != "" {
+	sysPrompt := deps.Config.OpenAISystemPrompt()
+	if chatType == domain.ChatTypeGroup {
+		groupInfo := "\n<general_group_chat_information>\nThis is a group conversation. " +
+			"Each user message is prefixed with the sender's name in the format \"[Name]: message\".\n" +
+			"Pay attention to who is speaking.\n</general_group_chat_information>"
+		messages = append(messages, domain.ChatMessage{Role: "system", Content: sysPrompt + groupInfo})
+	} else if sysPrompt != "" {
 		messages = append(messages, domain.ChatMessage{Role: "system", Content: sysPrompt})
 	}
-	messages = append(messages, domain.ChatMessage{Role: "user", Content: promptText})
+	messages = append(messages, domain.ChatMessage{Role: "user", Name: senderName, Content: displayContent})
 
 	// Call AI client
 	response, err := deps.AIClient.ChatCompletion(ctx, messages)
@@ -771,12 +793,12 @@ func handlePromptCommand(
 	assistantMsgID := int64(responseMsgID)
 
 	// Save user message (root of thread, no parent)
-	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, userMsgID, nil, "user", promptText); err != nil {
+	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, userMsgID, nil, "user", displayContent, senderName); err != nil {
 		logger.Errorf("Failed to save user message: %v", err)
 	}
 
 	// Save assistant message (parent is user message)
-	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, assistantMsgID, &userMsgID, "assistant", response); err != nil {
+	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, assistantMsgID, &userMsgID, "assistant", response, ""); err != nil {
 		logger.Errorf("Failed to save assistant message: %v", err)
 	}
 }
@@ -790,6 +812,7 @@ func handleThreadContinuation(
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 	threadRootID int64,
+	chatType domain.ChatType,
 ) {
 	ctx := context.Background()
 
@@ -826,13 +849,34 @@ func handleThreadContinuation(
 		return
 	}
 
-	// Build message array: system prompt + chain + new user message
+	// In group chats, resolve sender display name and prefix content
+	var senderName string
+	displayContent := msg.Text
+	if chatType == domain.ChatTypeGroup {
+		name, nameErr := deps.Messenger.FetchContactDisplayName(accID, msg.FromID)
+		if nameErr != nil {
+			logger.Warnf("Failed to fetch display name for contact %d: %v", msg.FromID, nameErr)
+		} else {
+			senderName = name
+		}
+		if senderName != "" {
+			displayContent = fmt.Sprintf("[%s]: %s", senderName, msg.Text)
+		}
+	}
+
+	// Build message array: system prompt + group info (if group) + chain + new user message
 	var messages []domain.ChatMessage
-	if sysPrompt := deps.Config.OpenAISystemPrompt(); sysPrompt != "" {
+	sysPrompt := deps.Config.OpenAISystemPrompt()
+	if chatType == domain.ChatTypeGroup {
+		groupInfo := "\n<general_group_chat_information>\nThis is a group conversation. " +
+			"Each user message is prefixed with the sender's name in the format \"[Name]: message\".\n" +
+			"Pay attention to who is speaking.\n</general_group_chat_information>"
+		messages = append(messages, domain.ChatMessage{Role: "system", Content: sysPrompt + groupInfo})
+	} else if sysPrompt != "" {
 		messages = append(messages, domain.ChatMessage{Role: "system", Content: sysPrompt})
 	}
 	messages = append(messages, chain...)
-	messages = append(messages, domain.ChatMessage{Role: "user", Content: msg.Text})
+	messages = append(messages, domain.ChatMessage{Role: "user", Name: senderName, Content: displayContent})
 
 	// Call AI client
 	response, err := deps.AIClient.ChatCompletion(ctx, messages)
@@ -857,12 +901,12 @@ func handleThreadContinuation(
 	assistantMsgID := int64(responseMsgID)
 
 	// Save user message (parent is the quoted message)
-	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, userMsgID, &quotedMsgID, "user", msg.Text); err != nil {
+	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, userMsgID, &quotedMsgID, "user", displayContent, senderName); err != nil {
 		logger.Errorf("Failed to save user message: %v", err)
 	}
 
 	// Save assistant message (parent is user message)
-	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, assistantMsgID, &userMsgID, "assistant", response); err != nil {
+	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, assistantMsgID, &userMsgID, "assistant", response, ""); err != nil {
 		logger.Errorf("Failed to save assistant message: %v", err)
 	}
 }
@@ -875,13 +919,13 @@ func handleDMMessage(logger handlerLogger, accID uint64, msgID uint64, msg *doma
 	// Check for /prompt command
 	cmdType := domain.GetCommandType(msg.Text)
 	if cmdType == domain.CommandPrompt {
-		handlePromptCommand(logger, accID, msgID, msg, deps)
+		handlePromptCommand(logger, accID, msgID, msg, deps, domain.ChatTypeSingle)
 		return
 	}
 
 	// Check for thread continuation
 	if isContinuation, threadRootID := isThreadContinuation(ctx, msg, deps); isContinuation {
-		handleThreadContinuation(logger, accID, msgID, msg, deps, threadRootID)
+		handleThreadContinuation(logger, accID, msgID, msg, deps, threadRootID, domain.ChatTypeSingle)
 		return
 	}
 
