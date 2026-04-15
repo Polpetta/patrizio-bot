@@ -65,9 +65,9 @@ const (
 
 // IncomingMessage represents an incoming chat message in domain terms.
 type IncomingMessage struct {
-	ID            uint64
-	ChatID        uint64
-	FromID        uint64
+	ID            uint32
+	ChatID        uint32
+	FromID        uint32
 	Text          string
 	File          string        // local path to attached file, empty if none
 	MediaType     string        // domain media type constant (image/sticker/gif/video), empty if not media
@@ -77,7 +77,7 @@ type IncomingMessage struct {
 
 // QuotedMessage represents the message being replied to.
 type QuotedMessage struct {
-	MessageID uint64
+	MessageID uint32
 }
 
 // FilterResponse represents the response associated with a filter

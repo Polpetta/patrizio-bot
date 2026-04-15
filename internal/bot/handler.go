@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,26 +63,14 @@ Add me to a group and I'll respond to messages based on configured filters. Here
 
 Triggers are matched as whole words anywhere in a message and are case-insensitive.`
 
-var errChatIDOverflow = errors.New("chat ID too large to convert")
-
-// convertChatID safely converts uint64 chat ID to int64 for database operations.
-func convertChatID(chatID uint64) (int64, error) {
-	// Delta Chat uses uint64 for ChatId, but SQLite's INTEGER PRIMARY KEY is int64.
-	// This conversion is safe because chat IDs in practice never exceed MaxInt64.
-	if chatID > math.MaxInt64 {
-		return 0, errChatIDOverflow
-	}
-	//nolint:gosec // G115: Overflow checked explicitly above
-	return int64(chatID), nil
-}
 
 // processMessage contains the core per-message routing logic.
 // It is called by the bot.OnNewMsg callback configured in bot.Setup and is
 // kept separate so it can be invoked synchronously in tests.
 func processMessage(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	deps *domain.Dependencies,
 ) {
 	msg, err := deps.Messenger.FetchMessage(accID, msgID)
@@ -119,8 +105,8 @@ func processMessage(
 // It checks for commands first, then normalizes the message and checks for matching filters.
 func handleGroupMessage(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 ) {
@@ -158,12 +144,7 @@ func handleGroupMessage(
 	// Normalize the incoming message for matching
 	normalizedMsg := domain.NormalizeMessage(msg.Text)
 
-	// Convert chat ID safely
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 
 	// Find all matching filters for this chat
 	filters, err := deps.FilterRepository.FindMatchingFilters(ctx, chatID, normalizedMsg)
@@ -214,9 +195,9 @@ func handleGroupMessage(
 func sendErrorMessage(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	message string,
 ) {
 	if _, err := deps.Messenger.SendTextReply(accID, chatID, replyTo, message); err != nil {
@@ -228,9 +209,9 @@ func sendErrorMessage(
 func sendConfirmation(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	message string,
 ) {
 	if _, err := deps.Messenger.SendTextReply(accID, chatID, replyTo, message); err != nil {
@@ -242,9 +223,9 @@ func sendConfirmation(
 func validateAndNormalizeTriggers(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	triggers []string,
 ) ([]string, bool) {
 	// Validate all triggers
@@ -269,9 +250,9 @@ func validateAndNormalizeTriggers(
 func handleTextFilterCreation(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	dbChatID int64,
 	cmd *domain.FilterCommand,
 	normalizedTriggers []string,
@@ -303,9 +284,9 @@ func handleTextFilterCreation(
 func handleReactionFilterCreation(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	dbChatID int64,
 	cmd *domain.FilterCommand,
 	normalizedTriggers []string,
@@ -329,11 +310,11 @@ func handleReactionFilterCreation(
 func downloadMediaIfNeeded(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	quotedMsg *domain.IncomingMessage,
-	quotedMsgID uint64,
+	quotedMsgID uint32,
 ) (*domain.IncomingMessage, error) {
 	if quotedMsg.DownloadState == domain.DownloadDone {
 		return quotedMsg, nil
@@ -365,9 +346,9 @@ func downloadMediaIfNeeded(
 func processMediaFile(
 	deps *domain.Dependencies,
 	logger handlerLogger,
-	accID uint64,
-	chatID uint64,
-	replyTo uint64,
+	accID uint32,
+	chatID uint32,
+	replyTo uint32,
 	filePath string,
 ) (string, error) {
 	if filePath == "" {
@@ -400,9 +381,9 @@ func processMediaFile(
 // handleMediaFilterCreation creates a media filter from an attached or quoted media message.
 func handleMediaFilterCreation(
 	logger handlerLogger,
-	accID uint64,
+	accID uint32,
 	msg *domain.IncomingMessage,
-	replyTo uint64,
+	replyTo uint32,
 	dbChatID int64,
 	cmd *domain.FilterCommand,
 	normalizedTriggers []string,
@@ -475,17 +456,12 @@ func handleMediaFilterCreation(
 // handleFilterCommand processes a /filter command
 func handleFilterCommand(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 ) {
-	// Convert chat ID safely
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 
 	// Parse the command
 	cmd, err := domain.ParseFilterCommand(msg.Text)
@@ -519,19 +495,14 @@ func handleFilterCommand(
 // handleStopCommand processes a /stop command
 func handleStopCommand(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 ) {
 	ctx := context.Background()
 
-	// Convert chat ID safely
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 
 	// Parse the command
 	cmd, err := domain.ParseStopCommand(msg.Text)
@@ -567,19 +538,14 @@ func handleStopCommand(
 // handleStopAllCommand processes a /stopall command
 func handleStopAllCommand(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 ) {
 	ctx := context.Background()
 
-	// Convert chat ID safely
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 
 	// Remove all filters for this chat
 	mediaHashes, err := deps.FilterRepository.RemoveAllFilters(ctx, chatID)
@@ -604,19 +570,14 @@ func handleStopAllCommand(
 // handleFiltersCommand processes a /filters command
 func handleFiltersCommand(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 ) {
 	ctx := context.Background()
 
-	// Convert chat ID safely
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 
 	// Get all filters for this chat
 	filters, err := deps.FilterRepository.ListFilters(ctx, chatID)
@@ -694,7 +655,6 @@ func isThreadContinuation(ctx context.Context, msg *domain.IncomingMessage, deps
 		return false, 0
 	}
 
-	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
 	quotedMsgID := int64(msg.Quote.MessageID)
 	exists, threadRootID, err := deps.ConversationRepository.IsConversationMessage(ctx, quotedMsgID)
 	if err != nil || !exists {
@@ -707,8 +667,8 @@ func isThreadContinuation(ctx context.Context, msg *domain.IncomingMessage, deps
 // handlePromptCommand processes a /prompt command, creating a new conversation thread.
 func handlePromptCommand(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 	chatType domain.ChatType,
@@ -723,11 +683,7 @@ func handlePromptCommand(
 	}
 
 	// Check allowlist
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 	if !isAllowedChat(chatID, deps) {
 		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
 			"This chat is not authorized to use the AI assistant.")
@@ -787,9 +743,7 @@ func handlePromptCommand(
 
 	// Save both messages to conversation repository.
 	// The thread root is the user's message (the /prompt message).
-	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
 	userMsgID := int64(msgID)
-	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
 	assistantMsgID := int64(responseMsgID)
 
 	// Save user message (root of thread, no parent)
@@ -807,8 +761,8 @@ func handlePromptCommand(
 // continuing an existing thread.
 func handleThreadContinuation(
 	logger handlerLogger,
-	accID uint64,
-	msgID uint64,
+	accID uint32,
+	msgID uint32,
 	msg *domain.IncomingMessage,
 	deps *domain.Dependencies,
 	threadRootID int64,
@@ -824,11 +778,7 @@ func handleThreadContinuation(
 	}
 
 	// Check allowlist
-	chatID, err := convertChatID(msg.ChatID)
-	if err != nil {
-		logger.Errorf("Invalid chat ID %d: %v", msg.ChatID, err)
-		return
-	}
+	chatID := int64(msg.ChatID)
 	if !isAllowedChat(chatID, deps) {
 		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
 			"This chat is not authorized to use the AI assistant.")
@@ -836,7 +786,6 @@ func handleThreadContinuation(
 	}
 
 	// Get the quoted message's MsgId (the leaf of the existing chain)
-	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
 	quotedMsgID := int64(msg.Quote.MessageID)
 
 	// Retrieve the existing conversation chain
@@ -895,9 +844,7 @@ func handleThreadContinuation(
 	}
 
 	// Save both messages to conversation repository
-	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
 	userMsgID := int64(msgID)
-	//nolint:gosec // G115: MsgId conversion is safe — Delta Chat MsgIds are small positive integers
 	assistantMsgID := int64(responseMsgID)
 
 	// Save user message (parent is the quoted message)
@@ -913,7 +860,7 @@ func handleThreadContinuation(
 
 // handleDMMessage processes a direct message.
 // It checks for /prompt command first, then thread continuation, then falls back to help text.
-func handleDMMessage(logger handlerLogger, accID uint64, msgID uint64, msg *domain.IncomingMessage, deps *domain.Dependencies) {
+func handleDMMessage(logger handlerLogger, accID uint32, msgID uint32, msg *domain.IncomingMessage, deps *domain.Dependencies) {
 	ctx := context.Background()
 
 	// Check for /prompt command

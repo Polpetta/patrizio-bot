@@ -4,7 +4,7 @@ package deltachat
 import (
 	"fmt"
 
-	dc "github.com/chatmail/rpc-client-go/deltachat"
+	dc "github.com/chatmail/rpc-client-go/v2/deltachat"
 
 	"github.com/polpetta/patrizio/internal/domain"
 )
@@ -20,42 +20,49 @@ func New(rpc *dc.Rpc) *Messenger {
 }
 
 // FetchMessage retrieves a message by ID and returns it as a domain IncomingMessage.
-func (m *Messenger) FetchMessage(accountID uint64, msgID uint64) (*domain.IncomingMessage, error) {
-	snapshot, err := m.rpc.GetMessage(dc.AccountId(accountID), dc.MsgId(msgID))
+func (m *Messenger) FetchMessage(accountID uint32, msgID uint32) (*domain.IncomingMessage, error) {
+	msg, err := m.rpc.GetMessage(accountID, msgID)
 	if err != nil {
 		return nil, err
 	}
 
-	msg := &domain.IncomingMessage{
-		ID:            uint64(snapshot.Id),
-		ChatID:        uint64(snapshot.ChatId),
-		FromID:        uint64(snapshot.FromId),
-		Text:          snapshot.Text,
-		File:          snapshot.File,
-		MediaType:     mapViewTypeToMediaType(snapshot.ViewType),
-		DownloadState: mapDownloadState(snapshot.DownloadState),
+	var filePath string
+	if msg.File != nil {
+		filePath = *msg.File
 	}
 
-	if snapshot.Quote != nil && snapshot.Quote.MessageId != 0 {
-		msg.Quote = &domain.QuotedMessage{
-			MessageID: uint64(snapshot.Quote.MessageId),
+	result := &domain.IncomingMessage{
+		ID:            msg.Id,
+		ChatID:        msg.ChatId,
+		FromID:        msg.FromId,
+		Text:          msg.Text,
+		File:          filePath,
+		MediaType:     mapViewTypeToMediaType(msg.ViewType),
+		DownloadState: mapDownloadState(msg.DownloadState),
+	}
+
+	if msg.Quote != nil {
+		if quote, ok := (*msg.Quote).(*dc.MessageQuoteWithMessage); ok {
+			result.Quote = &domain.QuotedMessage{
+				MessageID: quote.MessageId,
+			}
 		}
 	}
 
-	return msg, nil
+	return result, nil
 }
 
 // FetchChatType retrieves the chat type for a given chat.
-func (m *Messenger) FetchChatType(accountID uint64, chatID uint64) (domain.ChatType, error) {
-	info, err := m.rpc.GetBasicChatInfo(dc.AccountId(accountID), dc.ChatId(chatID))
+func (m *Messenger) FetchChatType(accountID uint32, chatID uint32) (domain.ChatType, error) {
+	info, err := m.rpc.GetBasicChatInfo(accountID, chatID)
 	if err != nil {
 		return "", err
 	}
 
 	switch info.ChatType {
-	case dc.ChatGroup, dc.ChatOutBroadcast, dc.ChatInBroadcast, dc.ChatMailinglist:
+	case dc.ChatTypeGroup, dc.ChatTypeOutBroadcast, dc.ChatTypeInBroadcast, dc.ChatTypeMailinglist:
 		return domain.ChatTypeGroup, nil
-	case dc.ChatSingle:
+	case dc.ChatTypeSingle:
 		return domain.ChatTypeSingle, nil
 	default:
 		return domain.ChatTypeUnknown, nil
@@ -63,66 +70,62 @@ func (m *Messenger) FetchChatType(accountID uint64, chatID uint64) (domain.ChatT
 }
 
 // SendTextReply sends a text message as a quote-reply and returns the new message ID.
-func (m *Messenger) SendTextReply(accountID uint64, chatID uint64, replyTo uint64, text string) (uint64, error) {
-	msgID, err := m.rpc.SendMsg(dc.AccountId(accountID), dc.ChatId(chatID), dc.MsgData{
-		Text:            text,
-		QuotedMessageId: dc.MsgId(replyTo),
+func (m *Messenger) SendTextReply(accountID uint32, chatID uint32, replyTo uint32, text string) (uint32, error) {
+	msgID, err := m.rpc.SendMsg(accountID, chatID, dc.MessageData{
+		Text:            &text,
+		QuotedMessageId: &replyTo,
 	})
 	if err != nil {
 		return 0, err
 	}
-	return uint64(msgID), nil
+	return msgID, nil
 }
 
 // SendMediaReply sends a media file as a quote-reply and returns the new message ID.
 // mediaType must be a domain media type constant (image/sticker/gif/video).
-func (m *Messenger) SendMediaReply(accountID uint64, chatID uint64, replyTo uint64, filePath string, mediaType string) (uint64, error) {
+func (m *Messenger) SendMediaReply(accountID uint32, chatID uint32, replyTo uint32, filePath string, mediaType string) (uint32, error) {
 	viewType := mapMediaTypeToViewType(mediaType)
 	if viewType == "" {
 		return 0, fmt.Errorf("unknown media type: %s", mediaType)
 	}
 
-	msgID, err := m.rpc.SendMsg(dc.AccountId(accountID), dc.ChatId(chatID), dc.MsgData{
-		File:            filePath,
-		ViewType:        viewType,
-		QuotedMessageId: dc.MsgId(replyTo),
+	msgID, err := m.rpc.SendMsg(accountID, chatID, dc.MessageData{
+		File:            &filePath,
+		Viewtype:        &viewType,
+		QuotedMessageId: &replyTo,
 	})
 	if err != nil {
 		return 0, err
 	}
-	return uint64(msgID), nil
+	return msgID, nil
 }
 
 // SendReaction sends a reaction emoji on a message.
-func (m *Messenger) SendReaction(accountID uint64, msgID uint64, reaction string) error {
-	_, err := m.rpc.SendReaction(dc.AccountId(accountID), dc.MsgId(msgID), reaction)
+func (m *Messenger) SendReaction(accountID uint32, msgID uint32, reaction string) error {
+	_, err := m.rpc.SendReaction(accountID, msgID, []string{reaction})
 	return err
 }
 
 // SendTextMessage sends a plain text message (no quote-reply).
-func (m *Messenger) SendTextMessage(accountID uint64, chatID uint64, text string) error {
-	_, err := m.rpc.MiscSendTextMessage(dc.AccountId(accountID), dc.ChatId(chatID), text)
+func (m *Messenger) SendTextMessage(accountID uint32, chatID uint32, text string) error {
+	_, err := m.rpc.MiscSendTextMessage(accountID, chatID, text)
 	return err
 }
 
 // DownloadMessage downloads the full media content of a message.
-func (m *Messenger) DownloadMessage(accountID uint64, msgID uint64) error {
-	return m.rpc.DownloadFullMessage(dc.AccountId(accountID), dc.MsgId(msgID))
+func (m *Messenger) DownloadMessage(accountID uint32, msgID uint32) error {
+	return m.rpc.DownloadFullMessage(accountID, msgID)
 }
 
-// lastSpecialContactID is the upper bound for Delta Chat's reserved/system contact IDs.
-// Contacts with ID <= this value are system accounts (self, device-chat, info bot, etc.).
-const lastSpecialContactID uint64 = 9
-
 // IsSpecialContact reports whether the given contact ID is a system/device contact.
-func (m *Messenger) IsSpecialContact(fromID uint64) bool {
-	return fromID <= lastSpecialContactID
+func (m *Messenger) IsSpecialContact(fromID uint32) bool {
+	return fromID <= dc.ContactLastSpecial
 }
 
 // FetchContactDisplayName retrieves the display name for a contact.
 // Falls back to the contact's name, then email address if display name is empty.
-func (m *Messenger) FetchContactDisplayName(accountID uint64, contactID uint64) (string, error) {
-	contact, err := m.rpc.GetContact(dc.AccountId(accountID), dc.ContactId(contactID))
+func (m *Messenger) FetchContactDisplayName(accountID uint32, contactID uint32) (string, error) {
+	contact, err := m.rpc.GetContact(accountID, contactID)
 	if err != nil {
 		return "", err
 	}
@@ -136,15 +139,15 @@ func (m *Messenger) FetchContactDisplayName(accountID uint64, contactID uint64) 
 }
 
 // mapViewTypeToMediaType maps Delta Chat view types to domain media type constants.
-func mapViewTypeToMediaType(viewType dc.MsgType) string {
+func mapViewTypeToMediaType(viewType dc.Viewtype) string {
 	switch viewType {
-	case dc.MsgImage:
+	case dc.ViewtypeImage:
 		return domain.MediaTypeImage
-	case dc.MsgSticker:
+	case dc.ViewtypeSticker:
 		return domain.MediaTypeSticker
-	case dc.MsgGif:
+	case dc.ViewtypeGif:
 		return domain.MediaTypeGIF
-	case dc.MsgVideo:
+	case dc.ViewtypeVideo:
 		return domain.MediaTypeVideo
 	default:
 		return ""
@@ -152,16 +155,16 @@ func mapViewTypeToMediaType(viewType dc.MsgType) string {
 }
 
 // mapMediaTypeToViewType maps domain media type constants back to Delta Chat view types.
-func mapMediaTypeToViewType(mediaType string) dc.MsgType {
+func mapMediaTypeToViewType(mediaType string) dc.Viewtype {
 	switch mediaType {
 	case domain.MediaTypeImage:
-		return dc.MsgImage
+		return dc.ViewtypeImage
 	case domain.MediaTypeSticker:
-		return dc.MsgSticker
+		return dc.ViewtypeSticker
 	case domain.MediaTypeGIF:
-		return dc.MsgGif
+		return dc.ViewtypeGif
 	case domain.MediaTypeVideo:
-		return dc.MsgVideo
+		return dc.ViewtypeVideo
 	default:
 		return ""
 	}
@@ -170,9 +173,9 @@ func mapMediaTypeToViewType(mediaType string) dc.MsgType {
 // mapDownloadState maps Delta Chat download state strings to domain constants.
 func mapDownloadState(state dc.DownloadState) domain.DownloadState {
 	switch state {
-	case dc.DownloadDone:
+	case dc.DownloadStateDone:
 		return domain.DownloadDone
-	case dc.DownloadAvailable:
+	case dc.DownloadStateAvailable:
 		return domain.DownloadAvailable
 	default:
 		return domain.DownloadState(state)
