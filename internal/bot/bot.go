@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"io/fs"
 
-	"github.com/chatmail/rpc-client-go/deltachat"
-	"github.com/deltachat-bot/deltabot-cli-go/botcli"
+	"github.com/chatmail/rpc-client-go/v2/deltachat"
+	"github.com/deltachat-bot/deltabot-cli-go/v2/botcli"
 	"github.com/spf13/cobra"
 
 	dcadapter "github.com/polpetta/patrizio/internal/adapter/deltachat"
@@ -26,8 +26,8 @@ func Setup(deps *domain.Dependencies) *botcli.BotCli {
 
 	cli.OnBotInit(func(cli *botcli.BotCli, bot *deltachat.Bot, _ *cobra.Command, _ []string) {
 		deps.Messenger = dcadapter.New(bot.Rpc)
-		bot.OnNewMsg(func(_ *deltachat.Bot, accID deltachat.AccountId, msgID deltachat.MsgId) {
-			go processMessage(cli.GetLogger(accID), uint64(accID), uint64(msgID), deps)
+		bot.OnNewMsg(func(_ *deltachat.Bot, accID uint32, msgID uint32) {
+			go processMessage(cli.GetLogger(accID), accID, msgID, deps)
 		})
 	})
 

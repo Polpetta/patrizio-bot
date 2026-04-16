@@ -17,11 +17,11 @@ import (
 
 type mockMessenger struct {
 	// FetchMessage
-	fetchMessageFn func(uint64, uint64) (*domain.IncomingMessage, error)
+	fetchMessageFn func(uint32, uint32) (*domain.IncomingMessage, error)
 	// FetchChatType
-	fetchChatTypeFn func(uint64, uint64) (domain.ChatType, error)
+	fetchChatTypeFn func(uint32, uint32) (domain.ChatType, error)
 	// FetchContactDisplayName
-	fetchContactDisplayNameFn func(uint64, uint64) (string, error)
+	fetchContactDisplayNameFn func(uint32, uint32) (string, error)
 	// SendTextMessage
 	sentTextMessages   []sentTextMessageEntry
 	sendTextMessageErr error
@@ -40,76 +40,76 @@ type mockMessenger struct {
 }
 
 type sentTextMessageEntry struct {
-	accID  uint64
-	chatID uint64
+	accID  uint32
+	chatID uint32
 	text   string
 }
 
 type sentTextReplyEntry struct {
-	accID  uint64
-	chatID uint64
-	replyTo uint64
+	accID  uint32
+	chatID uint32
+	replyTo uint32
 	text   string
 }
 
 type sentMediaReplyEntry struct {
-	accID     uint64
-	chatID    uint64
-	replyTo   uint64
+	accID     uint32
+	chatID    uint32
+	replyTo   uint32
 	filePath  string
 	mediaType string
 }
 
 type sentReactionEntry struct {
-	accID    uint64
-	msgID    uint64
+	accID    uint32
+	msgID    uint32
 	reaction string
 }
 
-func (m *mockMessenger) FetchMessage(accountID uint64, msgID uint64) (*domain.IncomingMessage, error) {
+func (m *mockMessenger) FetchMessage(accountID uint32, msgID uint32) (*domain.IncomingMessage, error) {
 	if m.fetchMessageFn != nil {
 		return m.fetchMessageFn(accountID, msgID)
 	}
 	return nil, fmt.Errorf("FetchMessage not configured")
 }
 
-func (m *mockMessenger) FetchChatType(accountID uint64, chatID uint64) (domain.ChatType, error) {
+func (m *mockMessenger) FetchChatType(accountID uint32, chatID uint32) (domain.ChatType, error) {
 	if m.fetchChatTypeFn != nil {
 		return m.fetchChatTypeFn(accountID, chatID)
 	}
 	return "", fmt.Errorf("FetchChatType not configured")
 }
 
-func (m *mockMessenger) SendTextMessage(accountID uint64, chatID uint64, text string) error {
+func (m *mockMessenger) SendTextMessage(accountID uint32, chatID uint32, text string) error {
 	m.sentTextMessages = append(m.sentTextMessages, sentTextMessageEntry{accID: accountID, chatID: chatID, text: text})
 	return m.sendTextMessageErr
 }
 
-func (m *mockMessenger) SendTextReply(accountID uint64, chatID uint64, replyTo uint64, text string) (uint64, error) {
+func (m *mockMessenger) SendTextReply(accountID uint32, chatID uint32, replyTo uint32, text string) (uint32, error) {
 	m.sentTextReplies = append(m.sentTextReplies, sentTextReplyEntry{accID: accountID, chatID: chatID, replyTo: replyTo, text: text})
-	return uint64(1), m.sendTextReplyErr
+	return uint32(1), m.sendTextReplyErr
 }
 
-func (m *mockMessenger) SendMediaReply(accountID uint64, chatID uint64, replyTo uint64, filePath string, mediaType string) (uint64, error) {
+func (m *mockMessenger) SendMediaReply(accountID uint32, chatID uint32, replyTo uint32, filePath string, mediaType string) (uint32, error) {
 	m.sentMediaReplies = append(m.sentMediaReplies, sentMediaReplyEntry{accID: accountID, chatID: chatID, replyTo: replyTo, filePath: filePath, mediaType: mediaType})
-	return uint64(1), m.sendMediaReplyErr
+	return uint32(1), m.sendMediaReplyErr
 }
 
-func (m *mockMessenger) SendReaction(accountID uint64, msgID uint64, reaction string) error {
+func (m *mockMessenger) SendReaction(accountID uint32, msgID uint32, reaction string) error {
 	m.sentReactions = append(m.sentReactions, sentReactionEntry{accID: accountID, msgID: msgID, reaction: reaction})
 	return m.reactionErr
 }
 
-func (m *mockMessenger) DownloadMessage(_ uint64, _ uint64) error {
+func (m *mockMessenger) DownloadMessage(_ uint32, _ uint32) error {
 	m.downloadCalled = true
 	return m.downloadErr
 }
 
-func (m *mockMessenger) IsSpecialContact(fromID uint64) bool {
+func (m *mockMessenger) IsSpecialContact(fromID uint32) bool {
 	return fromID <= 9
 }
 
-func (m *mockMessenger) FetchContactDisplayName(accountID uint64, contactID uint64) (string, error) {
+func (m *mockMessenger) FetchContactDisplayName(accountID uint32, contactID uint32) (string, error) {
 	if m.fetchContactDisplayNameFn != nil {
 		return m.fetchContactDisplayNameFn(accountID, contactID)
 	}
@@ -376,7 +376,7 @@ func TestHandleFilterCommand_TextFilter(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if !repo.createTextFilterCalled {
 		t.Fatal("expected CreateTextFilter to be called")
@@ -418,7 +418,7 @@ func TestHandleFilterCommand_ReactionFilter(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if !repo.createReactionFilterCalled {
 		t.Fatal("expected CreateReactionFilter to be called")
@@ -457,7 +457,7 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -516,7 +516,7 @@ func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) 
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -543,7 +543,7 @@ func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 	logger := &mockLogger{}
 
 	// The quoted message returns an image with DownloadDone state
-	mock.fetchMessageFn = func(_ uint64, msgID uint64) (*domain.IncomingMessage, error) {
+	mock.fetchMessageFn = func(_ uint32, msgID uint32) (*domain.IncomingMessage, error) {
 		if msgID == 999 {
 			return &domain.IncomingMessage{
 				ID:            999,
@@ -571,7 +571,7 @@ func TestHandleFilterCommand_MediaFromQuotedMessage(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -600,7 +600,7 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 	logger := &mockLogger{}
 
 	// Quoted message would return a different image, but it should not be used
-	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+	mock.fetchMessageFn = func(_ uint32, _ uint32) (*domain.IncomingMessage, error) {
 		t.Error("FetchMessage should not be called when attachment is present")
 		return nil, fmt.Errorf("should not be called")
 	}
@@ -622,7 +622,7 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors logged: %v", logger.errors)
@@ -657,7 +657,7 @@ func TestHandleFilterCommand_MediaNoAttachmentNoQuote(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleFilterCommand(logger, uint64(1), uint64(7), msg, deps)
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
 
 	if repo.createMediaFilterCalled || repo.createTextFilterCalled {
 		t.Fatal("no filter should have been created")
@@ -688,7 +688,7 @@ func TestHandleDMMessage(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleDMMessage(logger, uint64(1), uint64(1), msg, deps)
+	handleDMMessage(logger, uint32(1), uint32(1), msg, deps)
 
 	if len(mock.sentTextMessages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(mock.sentTextMessages))
@@ -722,7 +722,7 @@ func TestHandleGroupMessage_TextFilterMatch(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(1), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(1), msg, deps)
 
 	if len(mock.sentTextReplies) != 1 {
 		t.Fatalf("expected 1 SendTextReply call, got %d", len(mock.sentTextReplies))
@@ -763,7 +763,7 @@ func TestHandleGroupMessage_ReactionFilterMatch(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(5), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(5), msg, deps)
 
 	if len(mock.sentReactions) != 1 {
 		t.Fatalf("expected 1 reaction, got %d", len(mock.sentReactions))
@@ -807,7 +807,7 @@ func TestHandleGroupMessage_MediaFilterMatch(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(10), msg, deps)
 
 	if len(logger.errors) > 0 {
 		t.Fatalf("unexpected errors: %v", logger.errors)
@@ -861,7 +861,7 @@ func TestHandleGroupMessage_MediaFilterMatch_MissingFile(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(10), msg, deps)
 
 	// Should have logged an error, not sent anything
 	if len(mock.sentMediaReplies) != 0 {
@@ -889,7 +889,7 @@ func TestHandleGroupMessage_CommandRouting(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(1), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(1), msg, deps)
 
 	// The /filter command should have been processed, creating a text filter
 	if !repo.createTextFilterCalled {
@@ -897,37 +897,6 @@ func TestHandleGroupMessage_CommandRouting(t *testing.T) {
 	}
 }
 
-func TestConvertChatID(t *testing.T) {
-	tests := []struct {
-		name    string
-		chatID  uint64
-		want    int64
-		wantErr bool
-	}{
-		{name: "zero", chatID: 0, want: 0},
-		{name: "normal", chatID: 100, want: 100},
-		{name: "max int64", chatID: uint64(1<<63 - 1), want: 1<<63 - 1},
-		{name: "overflow", chatID: uint64(1 << 63), wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := convertChatID(tt.chatID)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tt.want {
-				t.Errorf("expected %d, got %d", tt.want, got)
-			}
-		})
-	}
-}
 
 // --- Prompt Command Tests ---
 
@@ -956,7 +925,7 @@ func TestHandlePromptCommand_NewThread(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	// Verify AI was called with system prompt + user message
 	if !aiClient.called {
@@ -1027,7 +996,7 @@ func TestHandlePromptCommand_NoSystemPrompt(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	// Without system prompt, only 1 message should be sent
 	if len(aiClient.lastMessages) != 1 {
@@ -1056,7 +1025,7 @@ func TestHandlePromptCommand_Unconfigured(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	// Should send error about unconfigured AI
 	if len(mock.sentTextReplies) != 1 {
@@ -1092,7 +1061,7 @@ func TestHandlePromptCommand_APIError(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	// Should send an error message to user
 	if len(mock.sentTextReplies) != 1 {
@@ -1127,7 +1096,7 @@ func TestHandlePromptCommand_AllowlistDenied(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	// AI should NOT be called
 	if aiClient.called {
@@ -1163,7 +1132,7 @@ func TestHandlePromptCommand_AllowlistAllowed(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	if !aiClient.called {
 		t.Fatal("AI client should be called for allowed chat")
@@ -1194,7 +1163,7 @@ func TestHandlePromptCommand_EmptyAllowlist(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	if !aiClient.called {
 		t.Fatal("AI client should be called when allowlist is empty")
@@ -1239,7 +1208,7 @@ func TestHandleThreadContinuation_ValidContinuation(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot, domain.ChatTypeSingle)
+	handleThreadContinuation(logger, uint32(1), uint32(20), msg, deps, threadRoot, domain.ChatTypeSingle)
 
 	// Verify AI was called with system + chain + new user message
 	if !aiClient.called {
@@ -1358,7 +1327,7 @@ func TestHandleThreadContinuation_Unconfigured(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5, domain.ChatTypeSingle)
+	handleThreadContinuation(logger, uint32(1), uint32(20), msg, deps, 5, domain.ChatTypeSingle)
 
 	// Should send error about unconfigured AI
 	if len(mock.sentTextReplies) != 1 {
@@ -1392,7 +1361,7 @@ func TestHandleThreadContinuation_AllowlistDenied(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, 5, domain.ChatTypeSingle)
+	handleThreadContinuation(logger, uint32(1), uint32(20), msg, deps, 5, domain.ChatTypeSingle)
 
 	if aiClient.called {
 		t.Fatal("AI client should not be called for denied chat")
@@ -1426,7 +1395,7 @@ func TestHandleDMMessage_PromptCommand(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleDMMessage(logger, uint64(1), uint64(1), msg, deps)
+	handleDMMessage(logger, uint32(1), uint32(1), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for /prompt in DM")
@@ -1473,7 +1442,7 @@ func TestHandleDMMessage_ThreadContinuation(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleDMMessage(logger, uint64(1), uint64(20), msg, deps)
+	handleDMMessage(logger, uint32(1), uint32(20), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for thread continuation in DM")
@@ -1511,7 +1480,7 @@ func TestHandleGroupMessage_PromptCommand(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(10), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(10), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for /prompt in group")
@@ -1555,7 +1524,7 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleGroupMessage(logger, uint64(1), uint64(20), msg, deps)
+	handleGroupMessage(logger, uint32(1), uint32(20), msg, deps)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called for thread continuation in group")
@@ -1570,9 +1539,9 @@ func TestHandleGroupMessage_ThreadContinuation(t *testing.T) {
 
 // makeGroupMessenger returns a mockMessenger configured to successfully return a regular-user
 // message in the given chat type, suitable for processMessage tests.
-func makeGroupMessenger(msgFromID uint64, chatType domain.ChatType) *mockMessenger {
+func makeGroupMessenger(msgFromID uint32, chatType domain.ChatType) *mockMessenger {
 	mock := &mockMessenger{}
-	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+	mock.fetchMessageFn = func(_ uint32, _ uint32) (*domain.IncomingMessage, error) {
 		return &domain.IncomingMessage{
 			ID:     1,
 			ChatID: 100,
@@ -1580,7 +1549,7 @@ func makeGroupMessenger(msgFromID uint64, chatType domain.ChatType) *mockMesseng
 			Text:   "hello",
 		}, nil
 	}
-	mock.fetchChatTypeFn = func(_ uint64, _ uint64) (domain.ChatType, error) {
+	mock.fetchChatTypeFn = func(_ uint32, _ uint32) (domain.ChatType, error) {
 		return chatType, nil
 	}
 	return mock
@@ -1588,7 +1557,7 @@ func makeGroupMessenger(msgFromID uint64, chatType domain.ChatType) *mockMesseng
 
 func TestProcessMessage_GetMessageError(t *testing.T) {
 	mock := &mockMessenger{}
-	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+	mock.fetchMessageFn = func(_ uint32, _ uint32) (*domain.IncomingMessage, error) {
 		return nil, fmt.Errorf("rpc down")
 	}
 	logger := &mockLogger{}
@@ -1598,7 +1567,7 @@ func TestProcessMessage_GetMessageError(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	processMessage(logger, uint64(1), uint64(5), deps)
+	processMessage(logger, uint32(1), uint32(5), deps)
 
 	if len(logger.errors) == 0 {
 		t.Error("expected an error to be logged when FetchMessage fails")
@@ -1611,7 +1580,7 @@ func TestProcessMessage_GetMessageError(t *testing.T) {
 func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
 	// The mock's IsSpecialContact returns true for fromID <= 9; use 9 to exercise that path.
 	mock := &mockMessenger{}
-	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+	mock.fetchMessageFn = func(_ uint32, _ uint32) (*domain.IncomingMessage, error) {
 		return &domain.IncomingMessage{
 			ID:     1,
 			ChatID: 100,
@@ -1626,7 +1595,7 @@ func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	processMessage(logger, uint64(1), uint64(5), deps)
+	processMessage(logger, uint32(1), uint32(5), deps)
 
 	if len(logger.errors) != 0 {
 		t.Errorf("expected no errors, got: %v", logger.errors)
@@ -1641,10 +1610,10 @@ func TestProcessMessage_IgnoresSpecialContact(t *testing.T) {
 
 func TestProcessMessage_GetChatInfoError(t *testing.T) {
 	mock := &mockMessenger{}
-	mock.fetchMessageFn = func(_ uint64, _ uint64) (*domain.IncomingMessage, error) {
+	mock.fetchMessageFn = func(_ uint32, _ uint32) (*domain.IncomingMessage, error) {
 		return &domain.IncomingMessage{ID: 1, ChatID: 100, FromID: 42, Text: "hi"}, nil
 	}
-	mock.fetchChatTypeFn = func(_ uint64, _ uint64) (domain.ChatType, error) {
+	mock.fetchChatTypeFn = func(_ uint32, _ uint32) (domain.ChatType, error) {
 		return "", fmt.Errorf("chat info unavailable")
 	}
 	logger := &mockLogger{}
@@ -1654,7 +1623,7 @@ func TestProcessMessage_GetChatInfoError(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	processMessage(logger, uint64(1), uint64(5), deps)
+	processMessage(logger, uint32(1), uint32(5), deps)
 
 	if len(logger.errors) == 0 {
 		t.Error("expected an error to be logged when FetchChatType fails")
@@ -1679,7 +1648,7 @@ func TestProcessMessage_RoutesGroupChat(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	processMessage(logger, uint64(1), uint64(5), deps)
+	processMessage(logger, uint32(1), uint32(5), deps)
 
 	// handleGroupMessage was reached: it tried filter matching and sent a response.
 	if len(mock.sentTextReplies) == 0 {
@@ -1699,7 +1668,7 @@ func TestProcessMessage_RoutesSingleChat(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	processMessage(logger, uint64(1), uint64(5), deps)
+	processMessage(logger, uint32(1), uint32(5), deps)
 
 	// handleDMMessage was reached: it sends the help text via SendTextMessage.
 	if len(mock.sentTextMessages) == 0 {
@@ -1719,7 +1688,7 @@ func TestProcessMessage_UnknownChatTypeWarns(t *testing.T) {
 		Messenger:        mock,
 	}
 
-	processMessage(logger, uint64(1), uint64(5), deps)
+	processMessage(logger, uint32(1), uint32(5), deps)
 
 	if len(logger.warns) == 0 {
 		t.Error("expected a warning to be logged for unknown chat type")
@@ -1739,7 +1708,7 @@ func TestHandlePromptCommand_GroupChat_WithDisplayName(t *testing.T) {
 		openAIMaxHistory: 50,
 	}
 	mock := &mockMessenger{
-		fetchContactDisplayNameFn: func(_ uint64, _ uint64) (string, error) {
+		fetchContactDisplayNameFn: func(_ uint32, _ uint32) (string, error) {
 			return "Mario Rossi", nil
 		},
 	}
@@ -1760,7 +1729,7 @@ func TestHandlePromptCommand_GroupChat_WithDisplayName(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeGroup)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeGroup)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called")
@@ -1808,7 +1777,7 @@ func TestHandlePromptCommand_GroupChat_DisplayNameFetchError(t *testing.T) {
 	convRepo := &mockConversationRepo{}
 	cfg := &mockConfig{openAIMaxHistory: 50}
 	mock := &mockMessenger{
-		fetchContactDisplayNameFn: func(_ uint64, _ uint64) (string, error) {
+		fetchContactDisplayNameFn: func(_ uint32, _ uint32) (string, error) {
 			return "", fmt.Errorf("contact not found")
 		},
 	}
@@ -1830,7 +1799,7 @@ func TestHandlePromptCommand_GroupChat_DisplayNameFetchError(t *testing.T) {
 	}
 
 	// Should not crash; falls back to no name
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeGroup)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeGroup)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called despite name fetch failure")
@@ -1874,7 +1843,7 @@ func TestHandlePromptCommand_DM_NoNameNoPrefix(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handlePromptCommand(logger, uint64(1), uint64(10), msg, deps, domain.ChatTypeSingle)
+	handlePromptCommand(logger, uint32(1), uint32(10), msg, deps, domain.ChatTypeSingle)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called")
@@ -1911,7 +1880,7 @@ func TestHandleThreadContinuation_GroupChat_WithDisplayName(t *testing.T) {
 		openAIMaxHistory: 50,
 	}
 	mock := &mockMessenger{
-		fetchContactDisplayNameFn: func(_ uint64, _ uint64) (string, error) {
+		fetchContactDisplayNameFn: func(_ uint32, _ uint32) (string, error) {
 			return "Luigi Verdi", nil
 		},
 	}
@@ -1933,7 +1902,7 @@ func TestHandleThreadContinuation_GroupChat_WithDisplayName(t *testing.T) {
 		Messenger:              mock,
 	}
 
-	handleThreadContinuation(logger, uint64(1), uint64(20), msg, deps, threadRoot, domain.ChatTypeGroup)
+	handleThreadContinuation(logger, uint32(1), uint32(20), msg, deps, threadRoot, domain.ChatTypeGroup)
 
 	if !aiClient.called {
 		t.Fatal("expected AI client to be called")
