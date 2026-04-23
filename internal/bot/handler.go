@@ -61,12 +61,21 @@ Add me to a group and I'll respond to messages based on configured filters. Here
   Example:
   /prompt What is the capital of France?
 
+/memory show
+  Show what the AI currently remembers about this chat.
+
+/memory clear
+  Wipe the AI's memory for this chat.
+
+/memory enable
+  Re-enable AI memory after it was disabled.
+
+/memory disable
+  Stop the AI from reading or writing memory in this chat.
+
 Triggers are matched as whole words anywhere in a message and are case-insensitive.`
 
 
-// processMessage contains the core per-message routing logic.
-// It is called by the bot.OnNewMsg callback configured in bot.Setup and is
-// kept separate so it can be invoked synchronously in tests.
 func processMessage(
 	logger handlerLogger,
 	accID uint32,
@@ -130,6 +139,9 @@ func handleGroupMessage(
 			return
 		case domain.CommandPrompt:
 			handlePromptCommand(logger, accID, msgID, msg, deps, domain.ChatTypeGroup)
+			return
+		case domain.CommandMemory:
+			handleMemoryCommand(logger, accID, msgID, msg, deps)
 			return
 		}
 	}
@@ -712,9 +724,20 @@ func handlePromptCommand(
 		}
 	}
 
-	// Build message array: system prompt (if set) + group info (if group) + user message
 	var messages []domain.ChatMessage
 	sysPrompt := deps.Config.OpenAISystemPrompt()
+
+	memoryEnabled := deps.MemoryRepository != nil && func() bool {
+		enabled, err := deps.MemoryRepository.IsEnabled(ctx, chatID)
+		return err == nil && enabled
+	}()
+
+	if memoryEnabled {
+		sysPrompt += "\n<tool_use>\nYou have per-chat memory tools (read_memory, append_memory, update_memory).\n" +
+			"Memory is markdown. Call read_memory only when prior context likely matters;\n" +
+			"update memory when the user shares a durable fact. Keep memory concise.\n</tool_use>"
+	}
+
 	if chatType == domain.ChatTypeGroup {
 		groupInfo := "\n<general_group_chat_information>\nThis is a group conversation. " +
 			"Each user message is prefixed with the sender's name in the format \"[Name]: message\".\n" +
@@ -725,8 +748,19 @@ func handlePromptCommand(
 	}
 	messages = append(messages, domain.ChatMessage{Role: "user", Name: senderName, Content: displayContent})
 
-	// Call AI client
-	response, err := deps.AIClient.ChatCompletion(ctx, messages)
+	var response domain.ChatResponse
+	if memoryEnabled && deps.ChatExecutor != nil {
+		tools := domain.BuildMemoryTools()
+		handler := domain.NewMemoryToolHandler(deps.MemoryRepository, chatID)
+		runErr := deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
+			var inner error
+			response, inner = deps.AIClient.ChatCompletion(innerCtx, messages, tools, handler)
+			return inner
+		})
+		err = runErr
+	} else {
+		response, err = deps.AIClient.ChatCompletion(ctx, messages, nil, nil)
+	}
 	if err != nil {
 		logger.Errorf("AI completion failed for chat %d: %v", msg.ChatID, err)
 		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
@@ -734,31 +768,30 @@ func handlePromptCommand(
 		return
 	}
 
-	// Send response as quote-reply
-	responseMsgID, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, response)
+	responseMsgID, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, response.Content)
 	if err != nil {
 		logger.Errorf("Failed to send AI response to chat %d: %v", msg.ChatID, err)
 		return
 	}
 
-	// Save both messages to conversation repository.
-	// The thread root is the user's message (the /prompt message).
+	if response.MemoryWritten {
+		if reactionErr := deps.Messenger.SendReaction(accID, msgID, "💾"); reactionErr != nil {
+			logger.Warnf("Failed to send memory reaction for msg %d: %v", msgID, reactionErr)
+		}
+	}
+
 	userMsgID := int64(msgID)
 	assistantMsgID := int64(responseMsgID)
 
-	// Save user message (root of thread, no parent)
 	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, userMsgID, nil, "user", displayContent, senderName); err != nil {
 		logger.Errorf("Failed to save user message: %v", err)
 	}
-
-	// Save assistant message (parent is user message)
-	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, assistantMsgID, &userMsgID, "assistant", response, ""); err != nil {
+	if err := deps.ConversationRepository.SaveMessage(ctx, userMsgID, assistantMsgID, &userMsgID, "assistant", response.Content, ""); err != nil {
 		logger.Errorf("Failed to save assistant message: %v", err)
 	}
 }
 
-// handleThreadContinuation processes a reply to a Patrizio conversation message,
-// continuing an existing thread.
+// handleThreadContinuation continues an existing AI conversation thread.
 func handleThreadContinuation(
 	logger handlerLogger,
 	accID uint32,
@@ -816,6 +849,18 @@ func handleThreadContinuation(
 	// Build message array: system prompt + group info (if group) + chain + new user message
 	var messages []domain.ChatMessage
 	sysPrompt := deps.Config.OpenAISystemPrompt()
+
+	memoryEnabled := deps.MemoryRepository != nil && func() bool {
+		enabled, err := deps.MemoryRepository.IsEnabled(ctx, chatID)
+		return err == nil && enabled
+	}()
+
+	if memoryEnabled {
+		sysPrompt += "\n<tool_use>\nYou have per-chat memory tools (read_memory, append_memory, update_memory).\n" +
+			"Memory is markdown. Call read_memory only when prior context likely matters;\n" +
+			"update memory when the user shares a durable fact. Keep memory concise.\n</tool_use>"
+	}
+
 	if chatType == domain.ChatTypeGroup {
 		groupInfo := "\n<general_group_chat_information>\nThis is a group conversation. " +
 			"Each user message is prefixed with the sender's name in the format \"[Name]: message\".\n" +
@@ -827,8 +872,19 @@ func handleThreadContinuation(
 	messages = append(messages, chain...)
 	messages = append(messages, domain.ChatMessage{Role: "user", Name: senderName, Content: displayContent})
 
-	// Call AI client
-	response, err := deps.AIClient.ChatCompletion(ctx, messages)
+	var response domain.ChatResponse
+	if memoryEnabled && deps.ChatExecutor != nil {
+		tools := domain.BuildMemoryTools()
+		handler := domain.NewMemoryToolHandler(deps.MemoryRepository, chatID)
+		runErr := deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
+			var inner error
+			response, inner = deps.AIClient.ChatCompletion(innerCtx, messages, tools, handler)
+			return inner
+		})
+		err = runErr
+	} else {
+		response, err = deps.AIClient.ChatCompletion(ctx, messages, nil, nil)
+	}
 	if err != nil {
 		logger.Errorf("AI completion failed for chat %d: %v", msg.ChatID, err)
 		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
@@ -836,25 +892,100 @@ func handleThreadContinuation(
 		return
 	}
 
-	// Send response as quote-reply
-	responseMsgID, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, response)
+	responseMsgID, err := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, response.Content)
 	if err != nil {
 		logger.Errorf("Failed to send AI response to chat %d: %v", msg.ChatID, err)
 		return
 	}
 
-	// Save both messages to conversation repository
+	if response.MemoryWritten {
+		if reactionErr := deps.Messenger.SendReaction(accID, msgID, "💾"); reactionErr != nil {
+			logger.Warnf("Failed to send memory reaction for msg %d: %v", msgID, reactionErr)
+		}
+	}
+
 	userMsgID := int64(msgID)
 	assistantMsgID := int64(responseMsgID)
 
-	// Save user message (parent is the quoted message)
 	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, userMsgID, &quotedMsgID, "user", displayContent, senderName); err != nil {
 		logger.Errorf("Failed to save user message: %v", err)
 	}
-
-	// Save assistant message (parent is user message)
-	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, assistantMsgID, &userMsgID, "assistant", response, ""); err != nil {
+	if err := deps.ConversationRepository.SaveMessage(ctx, threadRootID, assistantMsgID, &userMsgID, "assistant", response.Content, ""); err != nil {
 		logger.Errorf("Failed to save assistant message: %v", err)
+	}
+}
+
+// handleMemoryCommand processes a /memory sub-command (show, clear, enable, disable).
+func handleMemoryCommand(logger handlerLogger, accID uint32, msgID uint32, msg *domain.IncomingMessage, deps *domain.Dependencies) {
+	ctx := context.Background()
+
+	if deps.MemoryRepository == nil {
+		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
+			"Memory is not configured.")
+		return
+	}
+
+	sub, err := domain.ParseMemoryCommand(msg.Text)
+	if err != nil {
+		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, fmt.Sprintf("Invalid command: %v", err))
+		return
+	}
+
+	chatID := int64(msg.ChatID)
+
+	switch sub {
+	case domain.MemoryShow:
+		content, readErr := deps.MemoryRepository.Read(ctx, chatID)
+		if readErr != nil {
+			logger.Errorf("Failed to read memory for chat %d: %v", chatID, readErr)
+			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to read memory.")
+			return
+		}
+		if content == "" {
+			content = "(memory is empty)"
+		}
+		if _, sendErr := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, content); sendErr != nil {
+			logger.Errorf("Failed to send memory content: %v", sendErr)
+		}
+
+	case domain.MemoryClear:
+		// Serialize through ChatExecutor so a clear cannot interleave with an in-flight update_memory call.
+		var clearErr error
+		if deps.ChatExecutor != nil {
+			clearErr = deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
+				return deps.MemoryRepository.Clear(innerCtx, chatID)
+			})
+		} else {
+			clearErr = deps.MemoryRepository.Clear(ctx, chatID)
+		}
+		if clearErr != nil {
+			logger.Errorf("Failed to clear memory for chat %d: %v", chatID, clearErr)
+			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to clear memory.")
+			return
+		}
+		if _, sendErr := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, "Memory cleared."); sendErr != nil {
+			logger.Errorf("Failed to send clear confirmation: %v", sendErr)
+		}
+
+	case domain.MemoryEnable:
+		if setErr := deps.MemoryRepository.SetEnabled(ctx, chatID, true); setErr != nil {
+			logger.Errorf("Failed to enable memory for chat %d: %v", chatID, setErr)
+			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to enable memory.")
+			return
+		}
+		if _, sendErr := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, "Memory enabled."); sendErr != nil {
+			logger.Errorf("Failed to send enable confirmation: %v", sendErr)
+		}
+
+	case domain.MemoryDisable:
+		if setErr := deps.MemoryRepository.SetEnabled(ctx, chatID, false); setErr != nil {
+			logger.Errorf("Failed to disable memory for chat %d: %v", chatID, setErr)
+			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to disable memory.")
+			return
+		}
+		if _, sendErr := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, "Memory disabled."); sendErr != nil {
+			logger.Errorf("Failed to send disable confirmation: %v", sendErr)
+		}
 	}
 }
 
@@ -867,6 +998,10 @@ func handleDMMessage(logger handlerLogger, accID uint32, msgID uint32, msg *doma
 	cmdType := domain.GetCommandType(msg.Text)
 	if cmdType == domain.CommandPrompt {
 		handlePromptCommand(logger, accID, msgID, msg, deps, domain.ChatTypeSingle)
+		return
+	}
+	if cmdType == domain.CommandMemory {
+		handleMemoryCommand(logger, accID, msgID, msg, deps)
 		return
 	}
 

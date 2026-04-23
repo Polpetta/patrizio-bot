@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // FilterRepository defines database operations for filters
 type FilterRepository interface {
@@ -22,46 +25,85 @@ type MediaStorage interface {
 	Exists(hash string) (bool, error)
 }
 
+// MemoryRepository defines per-chat AI memory operations.
+// Read returns "" when no file exists. Write/Append return ErrMemoryTooLarge on overflow.
+// IsEnabled defaults to true when no setting is stored.
+type MemoryRepository interface {
+	Read(ctx context.Context, chatID int64) (string, error)
+	Write(ctx context.Context, chatID int64, content string) error
+	Append(ctx context.Context, chatID int64, text string) error
+	Clear(ctx context.Context, chatID int64) error
+	IsEnabled(ctx context.Context, chatID int64) (bool, error)
+	SetEnabled(ctx context.Context, chatID int64, enabled bool) error
+}
+
+// ChatSettingsRepository defines per-chat key/value storage.
+// Keys are dot-namespaced by feature (e.g. "memory.enabled").
+// Get returns ("", false, nil) when the key has no stored value.
+type ChatSettingsRepository interface {
+	Get(ctx context.Context, chatID int64, key string) (value string, ok bool, err error)
+	Set(ctx context.Context, chatID int64, key, value string) error
+	Delete(ctx context.Context, chatID int64, key string) error
+}
+
 // Config defines configuration access
 type Config interface {
 	DBPath() string
 	LogLevel() string
 	MediaPath() string
+	ChatStatePath() string
 	OpenAIBaseURL() string
 	OpenAIAPIKey() string
 	OpenAIModel() string
 	OpenAIMaxHistory() int
 	OpenAIAllowedChatIDs() []int64
 	OpenAISystemPrompt() string
+	OpenAIMaxToolIterations() int
+	OpenAIMaxMemoryBytes() int
 }
 
-// AIClient defines the port for AI chat completion services.
+// AITool describes a function the AI model may call during a chat completion.
+type AITool struct {
+	Name        string
+	Description string
+	Parameters  json.RawMessage // JSON Schema object
+}
+
+// AIToolHandler executes a tool call requested by the model.
+type AIToolHandler interface {
+	Handle(ctx context.Context, name string, args json.RawMessage) (result string, err error)
+}
+
+// ChatResponse is the result of a ChatCompletion call.
+type ChatResponse struct {
+	Content       string
+	MemoryWritten bool // true when append_memory or update_memory was called this turn
+}
+
+// AIClient defines the port for AI chat completion. When tools is nil, runs a single-shot completion.
 type AIClient interface {
-	ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error)
+	ChatCompletion(ctx context.Context, messages []ChatMessage, tools []AITool, handler AIToolHandler) (ChatResponse, error)
 }
 
-// Messenger defines the port for chat messaging operations.
-// All ID parameters use uint32 to match Delta Chat's native types.
+// ChatExecutor serialises per-chat operations: for a given chatID only one fn runs at a time;
+// different chatIDs run in parallel.
+type ChatExecutor interface {
+	Run(ctx context.Context, chatID int64, fn func(context.Context) error) error
+}
+
+// Messenger defines the port for Delta Chat messaging. All IDs are uint32 (Delta Chat's native type).
 type Messenger interface {
-	// FetchMessage retrieves a message by ID.
 	FetchMessage(accountID uint32, msgID uint32) (*IncomingMessage, error)
-	// FetchChatType retrieves the chat type (group/single) for a chat.
 	FetchChatType(accountID uint32, chatID uint32) (ChatType, error)
-	// SendTextReply sends a text message as a quote-reply. Returns the sent message ID.
 	SendTextReply(accountID uint32, chatID uint32, replyTo uint32, text string) (uint32, error)
-	// SendMediaReply sends a media file as a quote-reply. mediaType is a domain media type constant.
+	// SendMediaReply sends media as a quote-reply; mediaType is a domain media type constant.
 	SendMediaReply(accountID uint32, chatID uint32, replyTo uint32, filePath string, mediaType string) (uint32, error)
-	// SendReaction sends a reaction emoji on a message.
 	SendReaction(accountID uint32, msgID uint32, reaction string) error
-	// SendTextMessage sends a plain text message (no quote-reply).
 	SendTextMessage(accountID uint32, chatID uint32, text string) error
-	// DownloadMessage downloads a message's full media content.
 	DownloadMessage(accountID uint32, msgID uint32) error
-	// IsSpecialContact reports whether the given contact ID is a system/device contact
-	// that should be ignored by the bot (e.g. self, device-chat, info bot).
+	// IsSpecialContact reports whether the contact is a system/device contact to ignore (self, device-chat, info bot).
 	IsSpecialContact(fromID uint32) bool
-	// FetchContactDisplayName retrieves the display name for a contact.
-	// Falls back to the contact's name, then email address if display name is empty.
+	// FetchContactDisplayName falls back through display name → name → email address.
 	FetchContactDisplayName(accountID uint32, contactID uint32) (string, error)
 }
 
