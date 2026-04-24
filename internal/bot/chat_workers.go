@@ -32,26 +32,38 @@ func newChatWorker(bufSize int) *chatWorker {
 	return w
 }
 
+func (w *chatWorker) runJob(j job) {
+	w.lastUsed.Store(time.Now().Unix())
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				j.result <- fmt.Errorf("chat worker panic: %v", r)
+			}
+		}()
+		if err := j.ctx.Err(); err != nil {
+			j.result <- err
+			return
+		}
+		j.result <- j.fn(j.ctx)
+	}()
+}
+
 func (w *chatWorker) loop(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		select {
 		case <-w.done:
-			return
-		case j := <-w.ch:
-			w.lastUsed.Store(time.Now().Unix())
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						j.result <- fmt.Errorf("chat worker panic: %v", r)
-					}
-				}()
-				if err := j.ctx.Err(); err != nil {
-					j.result <- err
+			// Drain buffered jobs so every Run() caller receives a result.
+			for {
+				select {
+				case j := <-w.ch:
+					w.runJob(j)
+				default:
 					return
 				}
-				j.result <- j.fn(j.ctx)
-			}()
+			}
+		case j := <-w.ch:
+			w.runJob(j)
 		}
 	}
 }

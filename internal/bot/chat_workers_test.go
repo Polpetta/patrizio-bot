@@ -15,6 +15,7 @@ func TestChatWorkerRegistry_SameChatSerializes(t *testing.T) {
 
 	var order []int
 	var mu sync.Mutex
+	var inFlight atomic.Int32
 
 	var wg sync.WaitGroup
 	for i := 1; i <= 3; i++ {
@@ -23,16 +24,19 @@ func TestChatWorkerRegistry_SameChatSerializes(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			_ = r.Run(ctx, 42, func(_ context.Context) error {
+				if n := inFlight.Add(1); n > 1 {
+					t.Errorf("concurrent execution detected: %d jobs in flight at once", n)
+				}
 				mu.Lock()
 				order = append(order, i)
 				mu.Unlock()
+				inFlight.Add(-1)
 				return nil
 			})
 		}()
 	}
 	wg.Wait()
 
-	// All three must have run (order is non-deterministic but all present)
 	if len(order) != 3 {
 		t.Errorf("expected 3 jobs executed, got %d: %v", len(order), order)
 	}
@@ -105,6 +109,11 @@ func TestChatWorkerRegistry_ContextCancelWhileQueued(t *testing.T) {
 	err := <-errCh
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond) // allow any incorrectly-retained job to run
+	if executed.Load() {
+		t.Error("cancelled queued job must not execute")
 	}
 }
 

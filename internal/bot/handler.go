@@ -729,13 +729,17 @@ func handlePromptCommand(
 
 	memoryEnabled := deps.MemoryRepository != nil && func() bool {
 		enabled, err := deps.MemoryRepository.IsEnabled(ctx, chatID)
-		return err == nil && enabled
+		if err != nil {
+			logger.Warnf("Failed to determine whether memory is enabled for chat %d: %v", chatID, err)
+			return false
+		}
+		return enabled
 	}()
 
 	if memoryEnabled {
 		sysPrompt += "\n<tool_use>\nYou have per-chat memory tools (read_memory, append_memory, update_memory).\n" +
 			"Memory is markdown. Call read_memory only when prior context likely matters;\n" +
-			"update memory when the user shares a durable fact. Keep memory concise.\n</tool_use>"
+			"call update_memory when the user shares a durable fact. Keep memory concise.\n</tool_use>"
 	}
 
 	if chatType == domain.ChatTypeGroup {
@@ -852,13 +856,17 @@ func handleThreadContinuation(
 
 	memoryEnabled := deps.MemoryRepository != nil && func() bool {
 		enabled, err := deps.MemoryRepository.IsEnabled(ctx, chatID)
-		return err == nil && enabled
+		if err != nil {
+			logger.Warnf("Failed to determine whether memory is enabled for chat %d: %v", chatID, err)
+			return false
+		}
+		return enabled
 	}()
 
 	if memoryEnabled {
 		sysPrompt += "\n<tool_use>\nYou have per-chat memory tools (read_memory, append_memory, update_memory).\n" +
 			"Memory is markdown. Call read_memory only when prior context likely matters;\n" +
-			"update memory when the user shares a durable fact. Keep memory concise.\n</tool_use>"
+			"call update_memory when the user shares a durable fact. Keep memory concise.\n</tool_use>"
 	}
 
 	if chatType == domain.ChatTypeGroup {
@@ -925,13 +933,24 @@ func handleMemoryCommand(logger handlerLogger, accID uint32, msgID uint32, msg *
 		return
 	}
 
+	if deps.AIClient == nil {
+		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
+			"The AI assistant is not configured. Please set the proper configuration (API key, base URL, model) and restart the bot.")
+		return
+	}
+
+	chatID := int64(msg.ChatID)
+	if !isAllowedChat(chatID, deps) {
+		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID,
+			"This chat is not authorized to use the AI assistant.")
+		return
+	}
+
 	sub, err := domain.ParseMemoryCommand(msg.Text)
 	if err != nil {
 		sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, fmt.Sprintf("Invalid command: %v", err))
 		return
 	}
-
-	chatID := int64(msg.ChatID)
 
 	switch sub {
 	case domain.MemoryShow:

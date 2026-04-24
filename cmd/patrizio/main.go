@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/polpetta/patrizio/internal/bot"
 	"github.com/polpetta/patrizio/internal/config"
@@ -41,7 +42,7 @@ func main() {
 	defer stop()
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*1e9)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = chatExec.Shutdown(shutdownCtx) //nolint:errcheck // best-effort shutdown in signal handler
 	}()

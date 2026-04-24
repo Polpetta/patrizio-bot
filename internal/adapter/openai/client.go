@@ -82,6 +82,10 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []domain.ChatMessa
 				fmt.Errorf("tool-calling loop exceeded %d iterations", c.maxToolIteration)
 		}
 
+		if handler == nil {
+			return domain.ChatResponse{}, errors.New("model returned tool calls but no tool handler is configured")
+		}
+
 		sdkMsgs = append(sdkMsgs, choice.Message.ToParam())
 
 		for _, tc := range choice.Message.ToolCalls {

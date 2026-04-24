@@ -21,7 +21,7 @@ func BuildMemoryTools() []AITool {
 	return []AITool{
 		{
 			Name:        toolReadMemory,
-			Description: "Read the current memory file for this chat. Returns the full markdown content. May be empty.",
+			Description: "Read the current memory file for this chat. Returns the full markdown content, or the string \"(memory is empty)\" if no memory has been written yet.",
 			Parameters:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 		},
 		{
