@@ -20,7 +20,6 @@ import (
 )
 
 // Setup creates and configures the BotCli instance with lifecycle hooks.
-// The deps contains all injected dependencies (repository, storage, config).
 func Setup(deps *domain.Dependencies) *botcli.BotCli {
 	cli := botcli.New("patrizio")
 
@@ -34,8 +33,7 @@ func Setup(deps *domain.Dependencies) *botcli.BotCli {
 	return cli
 }
 
-// InitDatabase opens the SQLite database and runs pending migrations.
-// Exported for use in main.go to initialize DB before building dependencies.
+// InitDatabase opens the SQLite database and runs any pending migrations.
 func InitDatabase(cfg domain.Config, migrationsFS fs.FS, migrationsDir string) (*sql.DB, error) {
 	dbPath := cfg.DBPath()
 
@@ -55,18 +53,25 @@ func InitDatabase(cfg domain.Config, migrationsFS fs.FS, migrationsDir string) (
 }
 
 // BuildDependencies constructs the Dependencies with real adapter implementations.
-func BuildDependencies(cfg *config.Config, db *sql.DB) *domain.Dependencies {
+// Returns the registry separately so the caller can shut it down on process exit.
+func BuildDependencies(cfg *config.Config, db *sql.DB) (*domain.Dependencies, *ChatWorkerRegistry) {
+	chatSettings := sqlite.NewChatSettings(db)
+	memRepo := storage.NewMemoryStorage(afero.NewOsFs(), cfg.ChatStatePath(), cfg.OpenAIMaxMemoryBytes(), chatSettings)
+	chatExec := NewChatWorkerRegistry(4)
+
 	deps := &domain.Dependencies{
 		FilterRepository:       sqlite.New(db),
 		MediaStorage:           storage.New(afero.NewOsFs(), cfg.MediaPath()),
 		Config:                 cfg,
 		ConversationRepository: sqlite.NewConversationRepository(db),
+		MemoryRepository:       memRepo,
+		ChatSettingsRepository: chatSettings,
+		ChatExecutor:           chatExec,
 	}
 
-	// Only create the OpenAI client if an API key is configured.
 	if cfg.OpenAIAPIKey() != "" {
-		deps.AIClient = oai.New(cfg.OpenAIAPIKey(), cfg.OpenAIBaseURL(), cfg.OpenAIModel())
+		deps.AIClient = oai.New(cfg.OpenAIAPIKey(), cfg.OpenAIBaseURL(), cfg.OpenAIModel(), cfg.OpenAIMaxToolIterations())
 	}
 
-	return deps
+	return deps, chatExec
 }

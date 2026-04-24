@@ -23,14 +23,17 @@ The following table lists configuration keys, types, and defaults:
 
 These keys configure the `/prompt` command. The feature is disabled unless `openai_api_key` is set.
 
-| Key                       | Type     | Default                        | Description                                                        |
-|---------------------------|----------|--------------------------------|--------------------------------------------------------------------|
-| `openai_api_key`          | string   | _(empty)_                      | API key for the OpenAI-compatible provider. Required to enable AI. |
-| `openai_base_url`         | string   | _(empty)_                      | Custom base URL (for Ollama, LMStudio, etc.). Empty = OpenAI.      |
-| `openai_model`            | string   | `gpt-4o-mini`                  | Model identifier sent to the API.                                  |
-| `openai_max_history`      | int      | `50`                           | Max conversation messages sent as context per thread.              |
-| `openai_system_prompt`    | string   | `You are a helpful assistant.` | System prompt prepended to every request.                          |
-| `openai_allowed_chat_ids` | int list | _(empty)_                      | Chat ID allowlist. Empty = all chats allowed.                      |
+| Key                          | Type     | Default                        | Description                                                        |
+|------------------------------|----------|--------------------------------|--------------------------------------------------------------------|
+| `openai_api_key`             | string   | _(empty)_                      | API key for the OpenAI-compatible provider. Required to enable AI. |
+| `openai_base_url`            | string   | _(empty)_                      | Custom base URL (for Ollama, LMStudio, etc.). Empty = OpenAI.      |
+| `openai_model`               | string   | `gpt-4o-mini`                  | Model identifier sent to the API.                                  |
+| `openai_max_history`         | int      | `50`                           | Max conversation messages sent as context per thread.              |
+| `openai_system_prompt`       | string   | `You are a helpful assistant.` | System prompt prepended to every request.                          |
+| `openai_allowed_chat_ids`    | int list | _(empty)_                      | Chat ID allowlist. Empty = all chats allowed.                      |
+| `chat_state_path`            | string   | `/data/chat_state`             | Root directory for per-chat state (e.g. `memory.md`).              |
+| `openai_max_tool_iterations` | int      | `5`                            | Max tool-calling loop iterations per AI turn.                      |
+| `openai_max_memory_bytes`    | int      | `8192`                         | Max size of a chat memory file in bytes (default: 8 KB).           |
 
 ## TOML File Example
 
@@ -66,6 +69,15 @@ media_path = "/var/lib/patrizio/media"
 
 # Chat ID allowlist - if non-empty, only these chats can use /prompt (default: empty = all allowed)
 #openai_allowed_chat_ids = []
+
+# Per-chat state directory - stores memory.md files (default: "/data/chat_state")
+#chat_state_path = "/data/chat_state"
+
+# Max tool-calling loop iterations per AI turn (default: 5)
+#openai_max_tool_iterations = 5
+
+# Max memory file size in bytes (default: 8192)
+#openai_max_memory_bytes = 8192
 ```
 
 Note that this file can be found in the root repository of the project as well.
@@ -82,6 +94,10 @@ export PATRIZIO_MEDIA_PATH="/tmp/media"
 # OpenAI configuration (recommended to use env vars for the API key)
 export PATRIZIO_OPENAI_API_KEY="sk-..."
 export PATRIZIO_OPENAI_MODEL="gpt-4o-mini"
+
+# Memory configuration
+export PATRIZIO_CHAT_STATE_PATH="/var/lib/patrizio/chat_state"
+export PATRIZIO_OPENAI_MAX_MEMORY_BYTES=16384
 ```
 
 Environment variables take precedence over values in the TOML file.
