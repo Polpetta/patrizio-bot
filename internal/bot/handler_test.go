@@ -35,8 +35,9 @@ type mockMessenger struct {
 	sentReactions []sentReactionEntry
 	reactionErr   error
 	// DownloadMessage
-	downloadCalled bool
-	downloadErr    error
+	downloadCalled      bool
+	downloadCalledMsgID uint32
+	downloadErr         error
 }
 
 type sentTextMessageEntry struct {
@@ -100,8 +101,9 @@ func (m *mockMessenger) SendReaction(accountID uint32, msgID uint32, reaction st
 	return m.reactionErr
 }
 
-func (m *mockMessenger) DownloadMessage(_ uint32, _ uint32) error {
+func (m *mockMessenger) DownloadMessage(_ uint32, msgID uint32) error {
 	m.downloadCalled = true
+	m.downloadCalledMsgID = msgID
 	return m.downloadErr
 }
 
@@ -444,11 +446,12 @@ func TestHandleFilterCommand_MediaFromAttachment(t *testing.T) {
 
 	// Message has /filter cat with no text response, but carries an image attachment.
 	msg := &domain.IncomingMessage{
-		ChatID:    100,
-		FromID:    42,
-		Text:      "/filter cat",
-		MediaType: domain.MediaTypeImage,
-		File:      mediaPath,
+		ChatID:        100,
+		FromID:        42,
+		Text:          "/filter cat",
+		MediaType:     domain.MediaTypeImage,
+		File:          mediaPath,
+		DownloadState: domain.DownloadDone,
 	}
 
 	deps := &domain.Dependencies{
@@ -503,11 +506,12 @@ func TestHandleFilterCommand_MediaFromAttachment_MultipleTriggers(t *testing.T) 
 	logger := &mockLogger{}
 
 	msg := &domain.IncomingMessage{
-		ChatID:    200,
-		FromID:    42,
-		Text:      `/filter (cat, dog, "cute animals")`,
-		MediaType: domain.MediaTypeImage,
-		File:      mediaPath,
+		ChatID:        200,
+		FromID:        42,
+		Text:          `/filter (cat, dog, "cute animals")`,
+		MediaType:     domain.MediaTypeImage,
+		File:          mediaPath,
+		DownloadState: domain.DownloadDone,
 	}
 
 	deps := &domain.Dependencies{
@@ -606,11 +610,12 @@ func TestHandleFilterCommand_MediaFromAttachment_PreferredOverQuote(t *testing.T
 	}
 
 	msg := &domain.IncomingMessage{
-		ChatID:    100,
-		FromID:    42,
-		Text:      "/filter cat",
-		MediaType: domain.MediaTypeSticker,
-		File:      mediaPath,
+		ChatID:        100,
+		FromID:        42,
+		Text:          "/filter cat",
+		MediaType:     domain.MediaTypeSticker,
+		File:          mediaPath,
+		DownloadState: domain.DownloadDone,
 		Quote: &domain.QuotedMessage{
 			MessageID: 999,
 		},
@@ -669,6 +674,206 @@ func TestHandleFilterCommand_MediaNoAttachmentNoQuote(t *testing.T) {
 	}
 	if mock.sentTextReplies[0].replyTo != 7 {
 		t.Errorf("expected replyTo 7, got %d", mock.sentTextReplies[0].replyTo)
+	}
+}
+
+// TestHandleFilterCommand_AttachedGIF_DownloadAvailable is a regression test for issue #47:
+// when a GIF is attached but not yet fully downloaded (DownloadState == available),
+// the handler must call DownloadMessage and re-fetch before saving.
+func TestHandleFilterCommand_AttachedGIF_DownloadAvailable(t *testing.T) {
+	// The re-fetched message will point to this real file on disk.
+	gifContent := []byte("GIF89a-fake-gif-bytes")
+	dir := t.TempDir()
+	gifPath := filepath.Join(dir, "real.gif")
+	if err := os.WriteFile(gifPath, gifContent, 0o600); err != nil {
+		t.Fatalf("failed to write temp gif: %v", err)
+	}
+	expectedHash := computeSHA512(gifContent) + ".gif"
+
+	mock := &mockMessenger{}
+	repo := &mockFilterRepository{}
+	storage := newMockMediaStorage()
+	logger := &mockLogger{}
+
+	const gifMsgID uint32 = 55
+
+	// After DownloadMessage is called, FetchMessage returns the fully-downloaded message.
+	mock.fetchMessageFn = func(_ uint32, msgID uint32) (*domain.IncomingMessage, error) {
+		if msgID == gifMsgID {
+			return &domain.IncomingMessage{
+				ID:            gifMsgID,
+				MediaType:     domain.MediaTypeGIF,
+				File:          gifPath,
+				DownloadState: domain.DownloadDone,
+			}, nil
+		}
+		return nil, fmt.Errorf("unexpected msgID %d", msgID)
+	}
+
+	// Incoming /filter message: GIF is attached but not yet downloaded.
+	msg := &domain.IncomingMessage{
+		ID:            gifMsgID,
+		ChatID:        100,
+		FromID:        42,
+		Text:          "/filter mygif",
+		MediaType:     domain.MediaTypeGIF,
+		File:          "/tmp/placeholder-stub.gif",
+		DownloadState: domain.DownloadAvailable,
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     storage,
+		Messenger:        mock,
+	}
+
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
+
+	if len(logger.errors) > 0 {
+		t.Fatalf("unexpected errors logged: %v", logger.errors)
+	}
+	if !mock.downloadCalled {
+		t.Error("expected DownloadMessage to be called for not-yet-downloaded GIF")
+	}
+	if mock.downloadCalledMsgID != gifMsgID {
+		t.Errorf("expected DownloadMessage called with msgID %d, got %d", gifMsgID, mock.downloadCalledMsgID)
+	}
+	if !repo.createMediaFilterCalled {
+		t.Fatal("expected CreateMediaFilter to be called")
+	}
+	if repo.lastMediaType != domain.MediaTypeGIF {
+		t.Errorf("expected media type %q, got %q", domain.MediaTypeGIF, repo.lastMediaType)
+	}
+	if repo.lastMediaHash != expectedHash {
+		t.Errorf("expected hash from re-fetched file %q, got %q", expectedHash, repo.lastMediaHash)
+	}
+	if _, exists := storage.saved[expectedHash]; !exists {
+		t.Error("expected re-fetched GIF content to be saved to storage")
+	}
+}
+
+// TestHandleFilterCommand_AttachedGIF_UnsupportedDownloadState verifies that when an
+// attached GIF has a download state that is neither done nor available, the handler
+// sends an error message and does not create a filter.
+func TestHandleFilterCommand_AttachedGIF_UnsupportedDownloadState(t *testing.T) {
+	mock := &mockMessenger{}
+	repo := &mockFilterRepository{}
+	storage := newMockMediaStorage()
+	logger := &mockLogger{}
+
+	msg := &domain.IncomingMessage{
+		ID:            77,
+		ChatID:        100,
+		FromID:        42,
+		Text:          "/filter mygif",
+		MediaType:     domain.MediaTypeGIF,
+		File:          "/tmp/some-stub.gif",
+		DownloadState: "in_progress", // neither done nor available
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     storage,
+		Messenger:        mock,
+	}
+
+	handleFilterCommand(logger, uint32(1), uint32(7), msg, deps)
+
+	if mock.downloadCalled {
+		t.Error("DownloadMessage should not be called for an unavailable-state GIF")
+	}
+	if repo.createMediaFilterCalled {
+		t.Error("CreateMediaFilter should not be called when download state is unsupported")
+	}
+	// An error reply should have been sent
+	if len(mock.sentTextReplies) == 0 {
+		t.Error("expected an error text reply to be sent to the user")
+	}
+}
+
+// TestHandleFilterCommand_AttachedGIF_ZeroID_Fallback verifies that when msg.ID is zero
+// (e.g., test code constructs IncomingMessage without setting ID), the handler falls back
+// to using replyTo for download/refetch operations.
+func TestHandleFilterCommand_AttachedGIF_ZeroID_Fallback(t *testing.T) {
+	gifContent := []byte("GIF89a-fake-gif-bytes")
+	gifPath := writeTempFile(t, gifContent)
+	expectedHash := computeSHA512(gifContent) + filepath.Ext(gifPath)
+
+	mock := &mockMessenger{}
+	repo := &mockFilterRepository{}
+	storage := newMockMediaStorage()
+	logger := &mockLogger{}
+
+	// Incoming /filter message: ID is zero but media is attached.
+	// Use DownloadAvailable state to trigger the actual download path.
+	msg := &domain.IncomingMessage{
+		ID:            0,              // Zero ID - should trigger fallback to replyTo
+		ChatID:        100,
+		FromID:        42,
+		Text:          "/filter mygif",
+		MediaType:     domain.MediaTypeGIF,
+		File:          gifPath,       // Point directly to the real GIF for hashing
+		DownloadState: domain.DownloadAvailable,
+	}
+
+	const msgID uint32 = 123
+
+	// The mock is configured to respond with the correct message when FetchMessage is called.
+	mock.fetchMessageFn = func(_ uint32, id uint32) (*domain.IncomingMessage, error) {
+		if id == msgID {
+			return &domain.IncomingMessage{
+				ID:            id,
+				ChatID:        100,
+				FromID:        42,
+				Text:          "/filter mygif",
+				MediaType:     domain.MediaTypeGIF,
+				File:          gifPath,
+				DownloadState: domain.DownloadDone,
+			}, nil
+		}
+		return nil, fmt.Errorf("unexpected msgID %d", msgID)
+	}
+
+	deps := &domain.Dependencies{
+		FilterRepository: repo,
+		MediaStorage:     storage,
+		Messenger:        mock,
+	}
+
+	handleFilterCommand(logger, uint32(1), msgID, msg, deps)
+
+	// Verify no errors were logged
+	if len(logger.errors) > 0 {
+		t.Fatalf("unexpected errors logged: %v", logger.errors)
+	}
+
+	// Verify DownloadMessage was called with the fallback msgID (replyTo), not 0
+	if !mock.downloadCalled {
+		t.Error("expected DownloadMessage to be called for attached GIF")
+	}
+	if mock.downloadCalledMsgID != msgID {
+		t.Errorf("expected DownloadMessage called with msgID %d, got %d", msgID, mock.downloadCalledMsgID)
+	}
+
+	// Verify the filter was created
+	if !repo.createMediaFilterCalled {
+		t.Fatal("expected CreateMediaFilter to be called")
+	}
+	if repo.lastMediaType != domain.MediaTypeGIF {
+		t.Errorf("expected media type %q, got %q", domain.MediaTypeGIF, repo.lastMediaType)
+	}
+	if repo.lastMediaHash != expectedHash {
+		t.Errorf("expected hash %q, got %q", expectedHash, repo.lastMediaHash)
+	}
+
+	// Verify the GIF content was saved to storage
+	if _, exists := storage.saved[expectedHash]; !exists {
+		t.Error("expected GIF content to be saved to storage")
+	}
+
+	// Should have sent a confirmation as a quote-reply
+	if len(mock.sentTextReplies) != 1 {
+		t.Fatalf("expected 1 SendTextReply call (confirmation), got %d", len(mock.sentTextReplies))
 	}
 }
 
