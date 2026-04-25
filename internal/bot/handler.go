@@ -404,7 +404,13 @@ func handleMediaFilterCreation(
 	// In both cases, ensure the media is fully downloaded before reading the file.
 	var mediaMsg *domain.IncomingMessage
 	if hasAttachedMedia {
-		updated, err := downloadMediaIfNeeded(deps, logger, accID, msg.ChatID, replyTo, msg, msg.ID)
+		// Use msg.ID if available; fall back to replyTo for robustness against
+		// test code that constructs IncomingMessage without setting ID.
+		mediaMsgID := msg.ID
+		if mediaMsgID == 0 {
+			mediaMsgID = replyTo
+		}
+		updated, err := downloadMediaIfNeeded(deps, logger, accID, msg.ChatID, replyTo, msg, mediaMsgID)
 		if err != nil {
 			return // Error already sent to user
 		}
