@@ -356,7 +356,7 @@ func processMediaFile(
 		return "", fmt.Errorf("no file path")
 	}
 
-	// #nosec G304 -- filePath comes from Delta Chat RPC API (quotedMsg.File), not user input
+	// #nosec G304 -- filePath comes from Delta Chat RPC API (FetchMessage result), not user input
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to read media file: %v", err)
@@ -404,13 +404,7 @@ func handleMediaFilterCreation(
 	// In both cases, ensure the media is fully downloaded before reading the file.
 	var mediaMsg *domain.IncomingMessage
 	if hasAttachedMedia {
-		// Use msg.ID if available; fall back to replyTo for robustness against
-		// test code that constructs IncomingMessage without setting ID.
-		mediaMsgID := msg.ID
-		if mediaMsgID == 0 {
-			mediaMsgID = replyTo
-		}
-		updated, err := downloadMediaIfNeeded(deps, logger, accID, msg.ChatID, replyTo, msg, mediaMsgID)
+		updated, err := downloadMediaIfNeeded(deps, logger, accID, msg.ChatID, replyTo, msg, msg.ID)
 		if err != nil {
 			return // Error already sent to user
 		}
