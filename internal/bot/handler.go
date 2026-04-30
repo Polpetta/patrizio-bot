@@ -306,34 +306,34 @@ func handleReactionFilterCreation(
 	sendConfirmation(deps, logger, accID, chatID, replyTo, confirmMsg)
 }
 
-// downloadMediaIfNeeded ensures the quoted message media is downloaded and returns the updated message.
+// downloadMediaIfNeeded ensures the media is downloaded and returns the updated message.
 func downloadMediaIfNeeded(
 	deps *domain.Dependencies,
 	logger handlerLogger,
 	accID uint32,
 	chatID uint32,
 	replyTo uint32,
-	quotedMsg *domain.IncomingMessage,
-	quotedMsgID uint32,
+	mediaMsg *domain.IncomingMessage,
+	mediaMsgID uint32,
 ) (*domain.IncomingMessage, error) {
-	if quotedMsg.DownloadState == domain.DownloadDone {
-		return quotedMsg, nil
+	if mediaMsg.DownloadState == domain.DownloadDone {
+		return mediaMsg, nil
 	}
 
-	if quotedMsg.DownloadState != domain.DownloadAvailable {
+	if mediaMsg.DownloadState != domain.DownloadAvailable {
 		sendErrorMessage(deps, logger, accID, chatID, replyTo, "❌ Media is not available for download.")
 		return nil, fmt.Errorf("media not available")
 	}
 
 	// Try to download it
-	if err := deps.Messenger.DownloadMessage(accID, quotedMsgID); err != nil {
+	if err := deps.Messenger.DownloadMessage(accID, mediaMsgID); err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to download media: %v", err)
 		sendErrorMessage(deps, logger, accID, chatID, replyTo, errMsg)
 		return nil, err
 	}
 
 	// Re-fetch the message after download
-	updatedMsg, err := deps.Messenger.FetchMessage(accID, quotedMsgID)
+	updatedMsg, err := deps.Messenger.FetchMessage(accID, mediaMsgID)
 	if err != nil || updatedMsg.DownloadState != domain.DownloadDone {
 		sendErrorMessage(deps, logger, accID, chatID, replyTo, "❌ Media download incomplete. Please try again in a moment.")
 		return nil, fmt.Errorf("download incomplete")
@@ -356,7 +356,7 @@ func processMediaFile(
 		return "", fmt.Errorf("no file path")
 	}
 
-	// #nosec G304 -- filePath comes from Delta Chat RPC API (quotedMsg.File), not user input
+	// #nosec G304 -- filePath comes from Delta Chat RPC API (FetchMessage result), not user input
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		errMsg := fmt.Sprintf("❌ Failed to read media file: %v", err)
@@ -401,9 +401,14 @@ func handleMediaFilterCreation(
 
 	// Resolve the message that carries the media.
 	// Prefer an attachment on the current message; fall back to a quoted message.
+	// In both cases, ensure the media is fully downloaded before reading the file.
 	var mediaMsg *domain.IncomingMessage
 	if hasAttachedMedia {
-		mediaMsg = msg
+		updated, err := downloadMediaIfNeeded(deps, logger, accID, msg.ChatID, replyTo, msg, msg.ID)
+		if err != nil {
+			return // Error already sent to user
+		}
+		mediaMsg = updated
 	} else {
 		quotedMsg, err := deps.Messenger.FetchMessage(accID, msg.Quote.MessageID)
 		if err != nil {
