@@ -60,3 +60,43 @@ matching filter triggers a reply: text, media, or a reaction, with media files f
 
 In a one-to-one conversation the bot first checks for the `/prompt` command, then for thread continuations (replies to
 a previous AI message). If neither applies, it falls back to a short help message listing the available commands.
+
+## Domain Ports
+
+The `internal/domain/ports.go` file defines all port interfaces injected via `domain.Dependencies`:
+
+| Port                     | Description                                                         |
+|--------------------------|---------------------------------------------------------------------|
+| `FilterRepository`       | CRUD for trigger/response filters (SQLite)                          |
+| `ConversationRepository` | Thread message persistence for AI conversations (SQLite)            |
+| `MediaStorage`           | Media file read/write (filesystem via afero)                        |
+| `MemoryRepository`       | Per-chat `memory.md` blob + enabled flag                            |
+| `ChatSettingsRepository` | Per-chat key/value settings (SQLite, keys like `memory.enabled`)    |
+| `AIClient`               | OpenAI-compatible chat completions with optional tool-calling loop  |
+| `ChatExecutor`           | Serializes per-chat operations (goroutine+channel worker)           |
+| `Messenger`              | Delta Chat RPC send/receive abstractions                            |
+| `Config`                 | Application configuration values                                    |
+
+### `AIClient.ChatCompletion`
+
+The signature accepts optional tools and a handler:
+
+```go
+ChatCompletion(ctx context.Context, messages []ChatMessage, tools []AITool, handler AIToolHandler) (ChatResponse, error)
+```
+
+When `tools` is `nil`, the adapter runs a simple single-shot completion. When tools are provided, it runs a
+multi-turn loop (capped at `openai_max_tool_iterations`): execute tool calls via `handler.Handle`, append results,
+repeat until the model returns a plain text response. `ChatResponse.MemoryWritten` is `true` if any `append_memory`
+or `update_memory` call was made during the loop.
+
+## Per-chat Concurrency
+
+`internal/bot/chat_workers.go` implements `domain.ChatExecutor` using a goroutine-per-chat + channel pattern.
+
+* One worker goroutine owns the job queue for each active chatID.
+* Concurrent `/prompt`s in the same chat are serialized end-to-end (including the AI tool loop and `/memory clear`).
+* Different chats remain fully parallel.
+* Workers are process-lifetime in v1 (chat count is small). The `lastUsed` field is already in place for future
+  idle-eviction via a background ticker.
+* `Shutdown(ctx)` closes all worker `done` channels and waits for in-flight jobs to finish.

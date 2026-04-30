@@ -262,10 +262,10 @@ type mockAIClient struct {
 	called       bool
 }
 
-func (m *mockAIClient) ChatCompletion(_ context.Context, messages []domain.ChatMessage) (string, error) {
+func (m *mockAIClient) ChatCompletion(_ context.Context, messages []domain.ChatMessage, _ []domain.AITool, _ domain.AIToolHandler) (domain.ChatResponse, error) {
 	m.called = true
 	m.lastMessages = messages
-	return m.response, m.err
+	return domain.ChatResponse{Content: m.response}, m.err
 }
 
 // --- Mock ConversationRepository ---
@@ -337,6 +337,9 @@ func (m *mockConfig) OpenAIModel() string           { return m.openAIModel }
 func (m *mockConfig) OpenAIMaxHistory() int         { return m.openAIMaxHistory }
 func (m *mockConfig) OpenAIAllowedChatIDs() []int64 { return m.allowedChatIDs }
 func (m *mockConfig) OpenAISystemPrompt() string    { return m.systemPrompt }
+func (m *mockConfig) ChatStatePath() string         { return "" }
+func (m *mockConfig) OpenAIMaxToolIterations() int  { return 5 }
+func (m *mockConfig) OpenAIMaxMemoryBytes() int     { return 8192 }
 
 // --- Helper: write a temp file and return its path ---
 

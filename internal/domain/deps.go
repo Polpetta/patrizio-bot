@@ -8,4 +8,7 @@ type Dependencies struct {
 	AIClient               AIClient
 	ConversationRepository ConversationRepository
 	Messenger              Messenger
+	MemoryRepository       MemoryRepository
+	ChatSettingsRepository ChatSettingsRepository
+	ChatExecutor           ChatExecutor
 }
