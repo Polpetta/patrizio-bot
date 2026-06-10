@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizi
     mkdir -p data/db data/media
 
 # Download deltachat-rpc-server from GitHub releases
-FROM alpine:3@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS rpc-server
+FROM alpine:3@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS rpc-server
 
 ARG TARGETARCH
 ARG DELTACHAT_RPC_VERSION=v2.49.0
