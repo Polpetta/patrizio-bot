@@ -35,10 +35,12 @@ jobs:
         targetarch: [amd64, arm64]
         include:
           - targetarch: amd64
+            os: ubuntu-latest
             platform: linux/amd64
           - targetarch: arm64
+            os: ubuntu-26.04-arm
             platform: linux/arm64
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     name: Image build (${{ matrix.targetarch }})
     steps:
       - name: Checkout
