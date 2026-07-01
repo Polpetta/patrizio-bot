@@ -3,14 +3,14 @@ module github.com/polpetta/patrizio
 go 1.25.7
 
 require (
-	github.com/chatmail/rpc-client-go/v2 v2.49.0
+	github.com/chatmail/rpc-client-go/v2 v2.53.0
 	github.com/deltachat-bot/deltabot-cli-go/v2 v2.49.0
-	github.com/openai/openai-go/v3 v3.32.0
-	github.com/pressly/goose/v3 v3.27.0
+	github.com/openai/openai-go/v3 v3.36.0
+	github.com/pressly/goose/v3 v3.27.1
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	modernc.org/sqlite v1.48.2
+	modernc.org/sqlite v1.50.1
 )
 
 require (
@@ -21,7 +21,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -39,10 +39,10 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
-	modernc.org/libc v1.70.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
+	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )

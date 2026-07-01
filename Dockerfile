@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26@sha256:5f3787b7f902c07c7ec4f3aa91a301a3eda8133aa32661a3b3a3a86ab3a68a36 AS builder
+FROM golang:1.26@sha256:d184d9be4c13614e28498d632eeaaac704d662f18ad357e1df74a44424236cea AS builder
 
 WORKDIR /app
 
@@ -13,10 +13,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizi
     mkdir -p data/db data/media
 
 # Download deltachat-rpc-server from GitHub releases
-FROM alpine:3@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS rpc-server
+FROM alpine:3@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS rpc-server
 
 ARG TARGETARCH
-ARG DELTACHAT_RPC_VERSION=v2.49.0
+ARG DELTACHAT_RPC_VERSION=v2.53.0
 
 RUN ARCH=$(case ${TARGETARCH} in amd64) echo "x86_64" ;; arm64) echo "aarch64" ;; *) echo "x86_64" ;; esac) && \
     wget -q -O /deltachat-rpc-server \
@@ -24,7 +24,7 @@ RUN ARCH=$(case ${TARGETARCH} in amd64) echo "x86_64" ;; arm64) echo "aarch64" ;
     chmod +x /deltachat-rpc-server
 
 # Runtime stage
-FROM gcr.io/distroless/static-debian12@sha256:20bc6c0bc4d625a22a8fde3e55f6515709b32055ef8fb9cfbddaa06d1760f838
+FROM gcr.io/distroless/static-debian12@sha256:9c346e4be81b5ca7ff31a0d89eaeade58b0f95cfd3baed1f36083ddb47ca3160
 
 COPY --from=builder /app/patrizio /usr/local/bin/patrizio
 COPY --from=builder --chown=nonroot:nonroot /app/data /data
