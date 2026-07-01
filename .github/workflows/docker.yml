@@ -3,10 +3,10 @@ name: Build docker images
 on:
   push:
     branches:
-      - '**'
+      - "**"
     tags:
-      - 'v*.*.*'
-      - 'v*.*.*-*'
+      - "v*.*.*"
+      - "v*.*.*-*"
   release:
     types: [published]
   workflow_dispatch:
@@ -30,8 +30,16 @@ jobs:
 
   docker:
     needs: [hadolint]
+    strategy:
+      matrix:
+        targetarch: [amd64, arm64]
+        include:
+          - targetarch: amd64
+            platform: linux/amd64
+          - targetarch: arm64
+            platform: linux/arm64
     runs-on: ubuntu-latest
-    name: Docker
+    name: Image build (${{ matrix.targetarch }})
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -68,7 +76,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/heads/renovate/') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
