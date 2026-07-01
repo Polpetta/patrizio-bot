@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizi
 FROM alpine:3@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS rpc-server
 
 ARG TARGETARCH
-ARG DELTACHAT_RPC_VERSION=v2.49.0
+ARG DELTACHAT_RPC_VERSION=v2.53.0
 
 RUN ARCH=$(case ${TARGETARCH} in amd64) echo "x86_64" ;; arm64) echo "aarch64" ;; *) echo "x86_64" ;; esac) && \
     wget -q -O /deltachat-rpc-server \
