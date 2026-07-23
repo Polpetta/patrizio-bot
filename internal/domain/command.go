@@ -21,6 +21,18 @@ const (
 	CommandStopAll = "/stopall"
 	CommandFilters = "/filters"
 	CommandPrompt  = "/prompt"
+	CommandMemory  = "/memory"
+)
+
+// MemorySubCommand represents a /memory sub-command.
+type MemorySubCommand int
+
+// MemorySubCommand constants for the /memory command.
+const (
+	MemoryShow    MemorySubCommand = iota // show current memory contents
+	MemoryClear   MemorySubCommand = iota // delete memory file
+	MemoryEnable  MemorySubCommand = iota // enable memory for chat
+	MemoryDisable MemorySubCommand = iota // disable memory for chat
 )
 
 // FilterCommand represents a parsed /filter command
@@ -220,7 +232,7 @@ func parseCommaSeparatedTriggers(text string) ([]string, error) {
 }
 
 // Helper to detect command type from message
-var commandPattern = regexp.MustCompile(`^(/filter|/stop|/stopall|/filters|/prompt)\b`)
+var commandPattern = regexp.MustCompile(`^(/filter|/stop|/stopall|/filters|/prompt|/memory)\b`)
 
 // GetCommandType returns the command type if the message is a command, empty string otherwise
 func GetCommandType(text string) string {
@@ -229,6 +241,26 @@ func GetCommandType(text string) string {
 		return matches[1]
 	}
 	return ""
+}
+
+// ParseMemoryCommand parses a /memory sub-command from the message text.
+// Supported: /memory show, /memory clear, /memory enable, /memory disable.
+func ParseMemoryCommand(text string) (MemorySubCommand, error) {
+	text = strings.TrimPrefix(text, CommandMemory)
+	text = strings.TrimSpace(text)
+
+	switch text {
+	case "show":
+		return MemoryShow, nil
+	case "clear":
+		return MemoryClear, nil
+	case "enable":
+		return MemoryEnable, nil
+	case "disable":
+		return MemoryDisable, nil
+	default:
+		return 0, fmt.Errorf("%w: unknown /memory sub-command %q (use: show, clear, enable, disable)", ErrInvalidCommand, text)
+	}
 }
 
 // ParsePromptCommand extracts the message text after "/prompt ".

@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+type ChatSetting struct {
+	ChatID    int64
+	Key       string
+	Value     string
+	UpdatedAt time.Time
+}
+
 type ConversationMessage struct {
 	ID           int64
 	ThreadRootID int64
