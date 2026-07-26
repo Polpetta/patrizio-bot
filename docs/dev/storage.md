@@ -44,3 +44,36 @@ recursive CTE query. The chain is ordered chronologically and capped by `openai_
 The storage adapter uses `afero.NewOsFs()` to read/write files. When a media filter is added the bot writes the file to
 the configured media directory and stores its SHA-512 hash in the database. Later the handler looks up the file path
 with `deps.MediaStorage.Path(filter.MediaHash)`.
+
+## Memory Repository
+
+`storage.NewMemoryStorage(fs, root, maxBytes, settings)` returns a `*storage.MemoryStorage` that implements
+`domain.MemoryRepository`. It stores per-chat memory at `<chat_state_path>/<chatID>/memory.md`.
+
+Key behaviours:
+
+* **Atomic writes** — `Write` uses a tempfile + `afero.Fs.Rename` to avoid torn writes.
+* **Append** — reads the existing file, appends a newline + new text, then calls `Write`.
+* **Size cap** — `Write` (and therefore `Append`) rejects content larger than `maxBytes` with
+  `domain.ErrMemoryTooLarge`.
+* **Missing file → empty string** — `Read` returns `""` when the file does not exist yet.
+* **Enabled flag** — delegated to `ChatSettingsRepository` via the key `"memory.enabled"`. Missing key defaults to
+  `true` (default-on).
+
+## Chat Settings Repository
+
+`sqlite.NewChatSettings(db)` returns a `*sqlite.ChatSettings` that implements `domain.ChatSettingsRepository`. It
+stores per-chat key/value settings in the `chat_settings` table in the same SQLite database used for filters and
+conversations.
+
+Schema:
+
+    chat_settings (chat_id INTEGER, key TEXT, value TEXT, updated_at DATETIME, PRIMARY KEY (chat_id, key))
+
+Keys follow a dotted namespace convention: `memory.enabled` today; future features (e.g. per-chat custom system
+prompts) would use `prompt.system_prompt`, etc.
+
+`Get` returns `(value, ok, err)` — the explicit `ok` bool is a seam for a future "global Viper default + per-chat
+override" helper without changing callers. Missing key → `("", false, nil)`; database error → `("", false, err)`.
+
+`Set` uses an `ON CONFLICT … DO UPDATE` upsert. `Delete` removes the row (no-op if absent).

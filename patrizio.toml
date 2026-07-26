@@ -27,3 +27,12 @@ media_path = "/data/media"
 
 # Chat ID allowlist — if non-empty, only these chats can use /prompt (default: empty = all allowed)
 #openai_allowed_chat_ids = []
+
+# Per-chat state directory (for memory.md and future per-chat data; default: "/data/chat_state")
+#chat_state_path = "/data/chat_state"
+
+# Maximum number of tool-calling loop iterations per AI turn (default: 5)
+#openai_max_tool_iterations = 5
+
+# Maximum size of a chat memory file in bytes (default: 8192)
+#openai_max_memory_bytes = 8192
