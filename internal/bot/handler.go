@@ -75,7 +75,6 @@ Add me to a group and I'll respond to messages based on configured filters. Here
 
 Triggers are matched as whole words anywhere in a message and are case-insensitive.`
 
-
 func processMessage(
 	logger handlerLogger,
 	accID uint32,
@@ -783,10 +782,9 @@ func handlePromptCommand(
 		return
 	}
 
-	if response.MemoryWritten {
-		if reactionErr := deps.Messenger.SendReaction(accID, msgID, "💾"); reactionErr != nil {
-			logger.Warnf("Failed to send memory reaction for msg %d: %v", msgID, reactionErr)
-		}
+	// Set memory related reactions: bookmark for writing, bookmark read for reading
+	if reactionErr := sendToolReaction(accID, msgID, response, deps.Messenger); reactionErr != nil {
+		logger.Warnf("Failed to send tool reaction for msg %d: %v", msgID, reactionErr)
 	}
 
 	userMsgID := int64(msgID)
@@ -1039,4 +1037,18 @@ func handleDMMessage(logger handlerLogger, accID uint32, msgID uint32, msg *doma
 	if err := deps.Messenger.SendTextMessage(accID, msg.ChatID, helpText); err != nil {
 		logger.Errorf("Failed to send help text to chat %d: %v", msg.ChatID, err)
 	}
+}
+
+func sendToolReaction(accID uint32, msgID uint32, response domain.ChatResponse, messengerDep domain.Messenger) error {
+	if response.MemoryWritten {
+		if reactionErr := messengerDep.SendReaction(accID, msgID, "🔖"); reactionErr != nil {
+			return reactionErr
+		}
+	}
+	if response.MemoryRead {
+		if reactionErr := messengerDep.SendReaction(accID, msgID, "📑"); reactionErr != nil {
+			return reactionErr
+		}
+	}
+	return nil
 }

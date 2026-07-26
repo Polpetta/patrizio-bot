@@ -78,6 +78,7 @@ type AIToolHandler interface {
 type ChatResponse struct {
 	Content       string
 	MemoryWritten bool // true when append_memory or update_memory was called this turn
+	MemoryRead    bool // true when read_memory was called this turn
 }
 
 // AIClient defines the port for AI chat completion. When tools is nil, runs a single-shot completion.

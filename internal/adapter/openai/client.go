@@ -48,6 +48,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []domain.ChatMessa
 	sdkMsgs := toSDKMessages(messages)
 
 	var memoryWritten bool
+	var memoryRead bool
 
 	for i := 0; ; i++ {
 		params := openai.ChatCompletionNewParams{
@@ -74,11 +75,11 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []domain.ChatMessa
 			if content == "" {
 				return domain.ChatResponse{}, errors.New("empty response content from API")
 			}
-			return domain.ChatResponse{Content: content, MemoryWritten: memoryWritten}, nil
+			return domain.ChatResponse{Content: content, MemoryWritten: memoryWritten, MemoryRead: memoryRead}, nil
 		}
 
 		if i >= c.maxToolIteration {
-			return domain.ChatResponse{Content: choice.Message.Content, MemoryWritten: memoryWritten},
+			return domain.ChatResponse{Content: choice.Message.Content, MemoryWritten: memoryWritten, MemoryRead: memoryRead},
 				fmt.Errorf("tool-calling loop exceeded %d iterations", c.maxToolIteration)
 		}
 
@@ -94,6 +95,8 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []domain.ChatMessa
 				result = fmt.Sprintf("error: %v", toolErr)
 			} else if tc.Function.Name == "append_memory" || tc.Function.Name == "update_memory" {
 				memoryWritten = true
+			} else if tc.Function.Name == "read_memory" {
+				memoryRead = true
 			}
 			sdkMsgs = append(sdkMsgs, openai.ToolMessage(result, tc.ID))
 		}
