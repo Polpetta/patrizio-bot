@@ -20,11 +20,14 @@ run:
 
 # Run all tests
 test:
-	go test ./...
+	go test ./cmd/... ./internal/...
 
 # Run linter
+# Explicit package list to avoid golangci-lint walking into data/ (DeltaChat state).
+# Go's ./... only skips dirs prefixed with . or _ (and testdata), so data/ would
+# otherwise be traversed and fail with permission-denied on data/chat_state.
 lint:
-	golangci-lint run
+	golangci-lint run ./cmd/... ./internal/...
 
 # Build Docker image
 docker-build:
