@@ -162,6 +162,27 @@ make sqlc
 
 Generated code is written to `internal/database/queries/`.
 
+## Documentation
+
+This project includes a documentation site built with [zensical](https://github.com/zensical/zensical). The hosted
+version is available at [polpetta.github.io/patrizio-bot](https://polpetta.github.io/patrizio-bot).
+To host the documentation locally, run:
+
+```sh
+make doc-local
+```
+
+> [!NOTE]
+> `uv` and `Python` are required to run this command.
+
+This will make it available at `http://localhost:8000`. To build the documentation locally, instead, run:
+
+```sh
+make doc-build
+```
+
+This will build the documentation locally and place the output in `site/`.
+
 ## AI disclamer
 
 As can be see by the `openspec` folder, the heavy lifting of this project has been done by using AI (Claude CLI, in

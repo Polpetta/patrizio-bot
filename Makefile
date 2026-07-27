@@ -47,15 +47,21 @@ migrate-create:
 sqlc:
 	sqlc generate
 
-doc-setup:
-	python3 -m venv .venv
-	source ./.venv/bin/activate && pip3 install zensical==0.0.27
+# Phony alias so `make doc-setup` still triggers a check.
+# The real work is guarded by a stamp file whose mtime tracks the last
+# successful `uv sync`, so the recipe only re-runs when one of the
+# prerequisite files actually changes.
+doc-setup: .venv/.doc-setup.stamp
 
-doc-build:
-	source ./.venv/bin/activate && zensical build
+.venv/.doc-setup.stamp: .python-version pyproject.toml uv.lock
+	uv sync --locked --all-extras --dev
+	@touch $@
 
-doc-local:
-	source ./.venv/bin/activate && zensical serve
+doc-build: doc-setup
+	uv run zensical build
+
+doc-local: doc-setup
+	uv run zensical serve
 
 # Remove build artifacts
 clean:
