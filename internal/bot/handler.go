@@ -909,10 +909,9 @@ func handleThreadContinuation(
 		return
 	}
 
-	if response.MemoryWritten {
-		if reactionErr := deps.Messenger.SendReaction(accID, msgID, "💾"); reactionErr != nil {
-			logger.Warnf("Failed to send memory reaction for msg %d: %v", msgID, reactionErr)
-		}
+	// Set memory related reactions: bookmark for writing, bookmark read for reading
+	if reactionErr := sendToolReaction(accID, msgID, response, deps.Messenger); reactionErr != nil {
+		logger.Warnf("Failed to send tool reaction for msg %d: %v", msgID, reactionErr)
 	}
 
 	userMsgID := int64(msgID)
@@ -1044,8 +1043,7 @@ func sendToolReaction(accID uint32, msgID uint32, response domain.ChatResponse, 
 		if reactionErr := messengerDep.SendReaction(accID, msgID, "🔖"); reactionErr != nil {
 			return reactionErr
 		}
-	}
-	if response.MemoryRead {
+	} else if response.MemoryRead {
 		if reactionErr := messengerDep.SendReaction(accID, msgID, "📑"); reactionErr != nil {
 			return reactionErr
 		}
