@@ -47,13 +47,20 @@ migrate-create:
 sqlc:
 	sqlc generate
 
-doc-setup:
-	uv sync --locked --all-extras --dev
+# Phony alias so `make doc-setup` still triggers a check.
+# The real work is guarded by a stamp file whose mtime tracks the last
+# successful `uv sync`, so the recipe only re-runs when one of the
+# prerequisite files actually changes.
+doc-setup: .venv/.doc-setup.stamp
 
-doc-build:
+.venv/.doc-setup.stamp: .python-version pyproject.toml uv.lock
+	uv sync --locked --all-extras --dev
+	@touch $@
+
+doc-build: doc-setup
 	uv run zensical build
 
-doc-local:
+doc-local: doc-setup
 	uv run zensical serve
 
 # Remove build artifacts
