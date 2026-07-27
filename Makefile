@@ -49,7 +49,7 @@ sqlc:
 
 doc-setup:
 	python3 -m venv .venv
-	source ./.venv/bin/activate && pip3 install zensical==0.0.27
+	source ./.venv/bin/activate && pip3 install -r requirements.txt
 
 doc-build:
 	source ./.venv/bin/activate && zensical build
