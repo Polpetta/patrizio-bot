@@ -48,14 +48,13 @@ sqlc:
 	sqlc generate
 
 doc-setup:
-	python3 -m venv .venv
-	source ./.venv/bin/activate && pip3 install -r requirements.txt
+	uv sync --locked --all-extras --dev
 
 doc-build:
-	source ./.venv/bin/activate && zensical build
+	uv run zensical build
 
 doc-local:
-	source ./.venv/bin/activate && zensical serve
+	uv run zensical serve
 
 # Remove build artifacts
 clean:
