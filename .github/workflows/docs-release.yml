@@ -10,7 +10,7 @@ on:
       - 'uv.lock'
       - '.python-version'
       - 'zensical.toml'
-      - '.github/workflows/docs.yml'
+      - '.github/workflows/docs-release.yml'
       - 'Makefile'
   workflow_dispatch:
 
