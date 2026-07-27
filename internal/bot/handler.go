@@ -1043,8 +1043,7 @@ func sendToolReaction(accID uint32, msgID uint32, response domain.ChatResponse, 
 		if reactionErr := messengerDep.SendReaction(accID, msgID, "🔖"); reactionErr != nil {
 			return reactionErr
 		}
-	}
-	if response.MemoryRead {
+	} else if response.MemoryRead {
 		if reactionErr := messengerDep.SendReaction(accID, msgID, "📑"); reactionErr != nil {
 			return reactionErr
 		}
