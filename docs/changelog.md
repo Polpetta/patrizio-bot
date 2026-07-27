@@ -16,6 +16,6 @@ page for the latest release.
   with reply-chain threading and chat ID allowlist
 - Add per-chat AI memory: the model maintains a `memory.md` via tool calling
   (`read_memory`, `append_memory`, `update_memory`); users manage it with
-  `/memory show|clear|enable|disable`; a 🔖/📑 reaction signals when the AI writes or reads to memory
+  `/memory show|clear|enable|disable`; a 🔖/📑 reaction signals when the AI writes or reads from memory
 
 <!-- From here below we'll list all the older versions -->
