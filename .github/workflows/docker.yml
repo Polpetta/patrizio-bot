@@ -3,7 +3,8 @@ name: Build docker images
 on:
   push:
     branches:
-      - "**"
+      - "main"
+      - "renovate/**"
     tags:
       - "v*.*.*"
       - "v*.*.*-*"
