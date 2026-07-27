@@ -2,6 +2,8 @@ name: Commit check
 
 on:
   push:
+    branches:
+      - 'renovate/**'
   pull_request:
 
 permissions:
