@@ -38,8 +38,8 @@ runs a multi-turn loop:
 4. Cap at `openai_max_tool_iterations` to prevent infinite loops.
 
 `MemoryToolHandler` dispatches `read_memory`, `append_memory`, and `update_memory` to `MemoryRepository`. It tracks
-whether any write-tools were called and sets `ChatResponse.MemoryWritten = true`, which the handler uses to send a
-💾 reaction.
+whether any write-tools were called and sets `ChatResponse.MemoryWritten = true` or `ChatResponse.MemoryRead = true`,
+which the handler uses to send a 🔖/📑 reaction.
 
 The AI call (and any resulting memory writes) is serialized per-chat via `domain.ChatExecutor` so concurrent
 `/prompt`s cannot interleave their tool loops.
