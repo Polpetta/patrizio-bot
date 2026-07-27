@@ -49,7 +49,7 @@ The AI decides when to read or write memory on its own:
 - It calls `append_memory` or `update_memory` when you share something worth remembering (e.g., "I prefer espresso").
 
 When the AI writes to memory during a turn, Patrizio reacts to your message with a 🔖 emoji so you know something
-was saved. When it reads it, it uses 📑 instead.
+was saved. When it reads from memory, it uses 📑 instead.
 
 You can also nudge the AI explicitly:
 
