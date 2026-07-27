@@ -164,8 +164,8 @@ Generated code is written to `internal/database/queries/`.
 
 ## Documentation
 
-This project include a documentation site built with [zensical](https://github.com/zensical/zensical), which is the
-one hosted on [polpetta.github.io/patrizio-bot](https://polpetta.github.io/patrizio-bot).
+This project includes a documentation site built with [zensical](https://github.com/zensical/zensical). The hosted
+version is available at [polpetta.github.io/patrizio-bot](https://polpetta.github.io/patrizio-bot).
 To host the documentation locally, run:
 
 ```sh
