@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/chatmail/rpc-client-go/v2 v2.56.0
-	github.com/deltachat-bot/deltabot-cli-go/v2 v2.49.0
+	github.com/deltachat-bot/deltabot-cli-go/v2 v2.56.0
 	github.com/openai/openai-go/v3 v3.46.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/spf13/afero v1.15.0
