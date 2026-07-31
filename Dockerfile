@@ -17,7 +17,7 @@ FROM alpine:3@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4349
 
 ARG TARGETARCH
 # renovate: datasource=go packageName=github.com/chatmail/rpc-client-go/v2 versioning=semver
-ARG DELTACHAT_RPC_VERSION=v2.53.0
+ARG DELTACHAT_RPC_VERSION=v2.56.0
 
 RUN ARCH=$(case ${TARGETARCH} in amd64) echo "x86_64" ;; arm64) echo "aarch64" ;; *) echo "x86_64" ;; esac) && \
     wget -q -O /deltachat-rpc-server \
