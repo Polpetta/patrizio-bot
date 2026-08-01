@@ -9,7 +9,7 @@ repos:
         name: Go mod tidy
         entry: go mod tidy
         language: system
-        types: [go]
+        files: '^(go\.mod|go\.sum|.*\.go)$'
         pass_filenames: false
         stages: [pre-commit]
 
