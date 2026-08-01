@@ -60,6 +60,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Read Go version from go.mod
+        id: goversion
+        run: echo "value=$(awk '/^go / {print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
       - name: Docker metadata generation
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
@@ -94,6 +97,8 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GO_VERSION=${{ steps.goversion.outputs.value }}
           cache-from: type=gha,scope=${{ matrix.targetarch }}
           cache-to: type=gha,scope=${{ matrix.targetarch }},mode=max
           provenance: true

@@ -1,5 +1,10 @@
 # Build stage
-FROM golang:1.26@sha256:f96cc555eb8db430159a3aa6797cd5bae561945b7b0fe7d0e284c63a3b291609 AS builder
+# GO_VERSION is derived from go.mod by the caller (Makefile / CI workflow),
+# so go.mod stays the single source of truth for the Go toolchain version.
+# To suppress warnings a default version can by generated with
+# `make -B Dockerfile`
+ARG GO_VERSION=1.25.7
+FROM golang:${GO_VERSION} AS builder
 
 WORKDIR /app
 
