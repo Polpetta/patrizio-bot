@@ -6,6 +6,9 @@ SHELL := /bin/bash
 BINARY_NAME=patrizio
 DOCKER_IMAGE=patrizio
 
+# Go toolchain version, sourced from go.mod so it stays authoritative.
+GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
+
 project-setup: doc-setup
 	pre-commit install
 	pre-commit install --hook-type pre-push
@@ -29,12 +32,14 @@ test:
 lint:
 	golangci-lint run ./cmd/... ./internal/...
 
-# Go toolchain version, sourced from go.mod so it stays authoritative.
-GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
-
 # Build Docker image
-docker-build:
+docker-build: Dockerfile
 	docker buildx build -t $(DOCKER_IMAGE) --progress=plain --build-arg GO_VERSION=$(GO_VERSION) .
+
+# Update Dockerfile's default ARGs
+Dockerfile: go.mod
+	@sed -i 's/ARG GO_VERSION.*/ARG GO_VERSION=$(GO_VERSION)/' Dockerfile
+	@echo "Updated Dockerfile defaults with GO_VERSION=$(GO_VERSION)"
 
 # Run pending database migrations
 migrate:

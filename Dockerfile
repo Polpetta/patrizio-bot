@@ -1,8 +1,9 @@
 # Build stage
 # GO_VERSION is derived from go.mod by the caller (Makefile / CI workflow),
 # so go.mod stays the single source of truth for the Go toolchain version.
-# hadolint ignore=DL3006
-ARG GO_VERSION
+# To suppress warnings a default version can by generated with
+# `make -B Dockerfile`
+ARG GO_VERSION=1.25.7
 FROM golang:${GO_VERSION} AS builder
 
 WORKDIR /app
