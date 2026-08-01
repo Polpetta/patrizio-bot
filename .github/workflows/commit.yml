@@ -28,7 +28,7 @@ jobs:
           version: v2.12.2
 
       - name: Ensures Go mod tidy is up to date
-        uses: nickcharlton/diff-check@main
+        uses: nickcharlton/diff-check@9fa7ac2bd275b9ec60f13dbcef1b90cfaadc1872 # v1
         with:
           command: go mod tidy
 
