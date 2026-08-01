@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/polpetta/patrizio/internal/domain"
+	"github.com/polpetta/patrizio/internal/tools/memory"
 )
 
 type handlerLogger interface {
@@ -758,8 +759,8 @@ func handlePromptCommand(
 
 	var response domain.ChatResponse
 	if memoryEnabled && deps.ChatExecutor != nil {
-		tools := domain.BuildMemoryTools()
-		handler := domain.NewMemoryToolHandler(deps.MemoryRepository, chatID)
+		tools := memory.BuildMemoryTools()
+		handler := memory.NewMemoryToolHandler(deps.MemoryRepository, chatID)
 		runErr := deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
 			var inner error
 			response, inner = deps.AIClient.ChatCompletion(innerCtx, messages, tools, handler)
@@ -885,8 +886,8 @@ func handleThreadContinuation(
 
 	var response domain.ChatResponse
 	if memoryEnabled && deps.ChatExecutor != nil {
-		tools := domain.BuildMemoryTools()
-		handler := domain.NewMemoryToolHandler(deps.MemoryRepository, chatID)
+		tools := memory.BuildMemoryTools()
+		handler := memory.NewMemoryToolHandler(deps.MemoryRepository, chatID)
 		runErr := deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
 			var inner error
 			response, inner = deps.AIClient.ChatCompletion(innerCtx, messages, tools, handler)

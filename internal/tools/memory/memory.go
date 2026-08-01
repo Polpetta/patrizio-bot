@@ -1,10 +1,12 @@
-package domain
+package memory
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/polpetta/patrizio/internal/domain"
 )
 
 // ErrMemoryTooLarge is returned when a write would exceed the configured memory size limit.
@@ -17,8 +19,8 @@ const (
 )
 
 // BuildMemoryTools returns the tool descriptors for read_memory, append_memory, and update_memory.
-func BuildMemoryTools() []AITool {
-	return []AITool{
+func BuildMemoryTools() []domain.AITool {
+	return []domain.AITool{
 		{
 			Name:        toolReadMemory,
 			Description: "Read the current memory file for this chat. Returns the full markdown content, or the string \"(memory is empty)\" if no memory has been written yet.",
@@ -37,21 +39,21 @@ func BuildMemoryTools() []AITool {
 	}
 }
 
-// MemoryToolHandler implements AIToolHandler for the memory tools.
+// memoryToolHandler implements AIToolHandler for the memory tools.
 // Wrote is set to true when append_memory or update_memory is called.
-type MemoryToolHandler struct {
-	repo   MemoryRepository
+type memoryToolHandler struct {
+	repo   domain.MemoryRepository
 	chatID int64
 	Wrote  bool
 }
 
 // NewMemoryToolHandler creates a handler bound to a chat's memory repository.
-func NewMemoryToolHandler(repo MemoryRepository, chatID int64) *MemoryToolHandler {
-	return &MemoryToolHandler{repo: repo, chatID: chatID}
+func NewMemoryToolHandler(repo domain.MemoryRepository, chatID int64) domain.AIToolHandler {
+	return &memoryToolHandler{repo: repo, chatID: chatID}
 }
 
 // Handle dispatches a named tool call to the appropriate MemoryRepository method.
-func (h *MemoryToolHandler) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (h *memoryToolHandler) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	switch name {
 	case toolReadMemory:
 		content, err := h.repo.Read(ctx, h.chatID)

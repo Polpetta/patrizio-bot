@@ -56,6 +56,12 @@ type FilterTrigger struct {
 	TriggerText string
 }
 
+type MemoryReadToken struct {
+	MsgID       int64
+	ObservedSha string
+	CreatedAt   time.Time
+}
+
 type SchemaVersion struct {
 	ID        int64
 	AppliedAt time.Time
