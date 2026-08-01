@@ -1,6 +1,6 @@
 module github.com/polpetta/patrizio
 
-go 1.25.7
+go 1.26.5
 
 require (
 	github.com/chatmail/rpc-client-go/v2 v2.56.0
