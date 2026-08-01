@@ -29,9 +29,12 @@ test:
 lint:
 	golangci-lint run ./cmd/... ./internal/...
 
+# Go toolchain version, sourced from go.mod so it stays authoritative.
+GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
+
 # Build Docker image
 docker-build:
-	docker buildx build -t $(DOCKER_IMAGE) --progress=plain .
+	docker buildx build -t $(DOCKER_IMAGE) --progress=plain --build-arg GO_VERSION=$(GO_VERSION) .
 
 # Run pending database migrations
 migrate:
