@@ -6,7 +6,7 @@ repos:
   - repo: local
     hooks:
       - id: go-mod-tidy
-        name: Go Mod Tidy
+        name: Go mod tidy
         entry: go mod tidy
         language: system
         types: [go]
