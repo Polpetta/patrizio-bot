@@ -2,6 +2,17 @@
 # See https://pre-commit.com for more information
 
 repos:
+  # Go mod tidy for Go code (using local installation)
+  - repo: local
+    hooks:
+      - id: go-mod-tidy
+        name: Go Mod Tidy
+        entry: go mod tidy
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [pre-commit]
+
   # Golangci-lint for Go code (using local installation)
   - repo: local
     hooks:
@@ -74,7 +85,8 @@ repos:
         entry: hadolint
 
 ci:
-  skip: [golangci-lint, go-build, docker-build, run-tests, hadolint] # These are already covered by `commit.yml` and `docker.yml` Github Actions
+  # These are already covered by `commit.yml` and `docker.yml` Github Actions
+  skip: [go-mod-tidy, golangci-lint, go-build, docker-build, run-tests, hadolint]
   autofix_commit_msg: |
     fix(lint): apply pre-commit lints
 

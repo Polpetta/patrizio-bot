@@ -29,5 +29,6 @@
   ],
   "minimumReleaseAge": "7 days",
   "schedule": ["* 9-23 * * *"],
-  "automergeSchedule": ["* 9-23 * * *"]
+  "automergeSchedule": ["* 9-23 * * *"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"]
 }
