@@ -1,3 +1,4 @@
+// Package memory provides AI tool definitions and a handler for read/append/update memory operations.
 package memory
 
 import (
@@ -40,26 +41,36 @@ func BuildMemoryTools() []domain.AITool {
 }
 
 // memoryToolHandler implements AIToolHandler for the memory tools.
-// Wrote is set to true when append_memory or update_memory is called.
+// It captures the readToken from Read() and passes it to subsequent write operations
+// to enforce read-before-write ordering. Wrote is set to true when append_memory
+// or update_memory is called.
 type memoryToolHandler struct {
-	repo   domain.MemoryRepository
-	chatID int64
-	Wrote  bool
+	repo      domain.MemoryRepository
+	chatID    int64
+	msgID     int64
+	readToken string
+	Wrote     bool
 }
 
-// NewMemoryToolHandler creates a handler bound to a chat's memory repository.
-func NewMemoryToolHandler(repo domain.MemoryRepository, chatID int64) domain.AIToolHandler {
-	return &memoryToolHandler{repo: repo, chatID: chatID}
+// NewMemoryToolHandler creates a handler bound to a chat's memory repository and message ID.
+// The msgID is used to identify which message owns the memory and is required
+// for all read/write operations.
+func NewMemoryToolHandler(repo domain.MemoryRepository, chatID int64, msgID int64) domain.AIToolHandler {
+	return &memoryToolHandler{repo: repo, chatID: chatID, msgID: msgID}
 }
 
 // Handle dispatches a named tool call to the appropriate MemoryRepository method.
+// For read_memory, it captures the returned content as the readToken for subsequent
+// write operations. For append_memory and update_memory, it passes the readToken
+// and msgID to enforce read-before-write ordering.
 func (h *memoryToolHandler) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	switch name {
 	case toolReadMemory:
-		content, err := h.repo.Read(ctx, h.chatID)
+		content, err := h.repo.Read(ctx, h.chatID, h.msgID)
 		if err != nil {
 			return "", fmt.Errorf("read_memory failed: %w", err)
 		}
+		h.readToken = content
 		if content == "" {
 			return "(memory is empty)", nil
 		}
@@ -72,11 +83,12 @@ func (h *memoryToolHandler) Handle(ctx context.Context, name string, args json.R
 		if err := json.Unmarshal(args, &p); err != nil {
 			return "", fmt.Errorf("append_memory: invalid args: %w", err)
 		}
-		if err := h.repo.Append(ctx, h.chatID, p.Text); err != nil {
+		result, err := h.repo.Append(ctx, h.readToken, h.chatID, h.msgID, p.Text)
+		if err != nil {
 			return "", fmt.Errorf("append_memory failed: %w", err)
 		}
 		h.Wrote = true
-		return "appended", nil
+		return result, nil
 
 	case toolUpdateMemory:
 		var p struct {
@@ -85,11 +97,12 @@ func (h *memoryToolHandler) Handle(ctx context.Context, name string, args json.R
 		if err := json.Unmarshal(args, &p); err != nil {
 			return "", fmt.Errorf("update_memory: invalid args: %w", err)
 		}
-		if err := h.repo.Write(ctx, h.chatID, p.Content); err != nil {
+		result, err := h.repo.Write(ctx, h.readToken, h.chatID, h.msgID, p.Content)
+		if err != nil {
 			return "", fmt.Errorf("update_memory failed: %w", err)
 		}
 		h.Wrote = true
-		return "updated", nil
+		return result, nil
 
 	default:
 		return "", fmt.Errorf("unknown memory tool: %s", name)

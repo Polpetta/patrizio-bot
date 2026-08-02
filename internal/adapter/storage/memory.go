@@ -16,6 +16,8 @@ import (
 const memoryFileName = "memory.md"
 
 // MemoryStorage implements domain.MemoryRepository using the filesystem (afero).
+// It enforces read-before-write using SHA256 checksums. Callers must Read first
+// to obtain a valid token before calling Write, Append, or Clear.
 type MemoryStorage struct {
 	fs         afero.Fs
 	root       string
@@ -24,15 +26,17 @@ type MemoryStorage struct {
 	readTokens domain.ReadTokensRepository
 }
 
+// neverReadError is returned when a write/append/clear is attempted without a prior Read call.
 type neverReadError struct {
 	msgID int64
 }
 
+// Error returns a descriptive message indicating which msgID has never been read.
 func (e *neverReadError) Error() string {
 	return fmt.Sprintf("memory was never read thread ending where msgID=%d belongs", e.msgID)
 }
 
-// NewMemoryStorage creates a MemoryStorage rooted at root with the given size cap and settings backend.
+// NewMemoryStorage creates a MemoryStorage rooted at root with the given size cap, settings backend, and read-token repository.
 func NewMemoryStorage(fs afero.Fs, root string, maxBytes int, settings domain.ChatSettingsRepository, readTokens domain.ReadTokensRepository) *MemoryStorage {
 	return &MemoryStorage{fs: fs, root: root, maxBytes: maxBytes, settings: settings, readTokens: readTokens}
 }
@@ -52,33 +56,40 @@ func (m *MemoryStorage) calculateChecksum(content []byte) string {
 	return string(sha.Sum(nil))
 }
 
-// saveChecksum calculates SHA256 checksum and saves it in the repo
+// saveChecksum calculates a SHA256 checksum of the content and persists it via the readTokens repository for later validation.
 func (m *MemoryStorage) saveChecksum(ctx context.Context, msgID int64, content []byte) error {
 	checksum := m.calculateChecksum(content)
-	return m.readTokens.SaveToken(ctx, msgID, string(checksum))
+	return m.readTokens.SaveToken(ctx, msgID, checksum)
 }
 
+// isChecksumValid checks whether the provided content matches the saved SHA256 checksum for the given message ID.
 func (m *MemoryStorage) isChecksumValid(ctx context.Context, msgID int64, provided []byte) (bool, error) {
 	token, err := m.readTokens.GetToken(ctx, msgID)
 	if err != nil {
 		return false, fmt.Errorf("failed to read token: %w", err)
 	}
 	if token == "" {
-		return false, &neverReadError{}
+		return false, &neverReadError{msgID: msgID}
 	}
 	return token == m.calculateChecksum(provided), nil
 }
 
-// Read returns the memory content for a chat, or "" if no file exists yet.
+// Read returns the memory content for a chat, or "" if no file exists yet. It saves a SHA256 checksum keyed by msgID for later validation in Write/Append/Clear calls.
 func (m *MemoryStorage) Read(ctx context.Context, chatID int64, msgID int64) (string, error) {
 	data, err := afero.ReadFile(m.fs, m.memoryPath(chatID))
 	if err != nil {
 		if errors.Is(err, afero.ErrFileNotFound) {
+			if saveErr := m.saveChecksum(ctx, msgID, []byte{}); saveErr != nil {
+				return "", fmt.Errorf("failed to save checksum: %w", saveErr)
+			}
 			return "", nil
 		}
 		// afero wraps os errors; fall back to an Exists check for other not-found variants.
 		ok, existErr := afero.Exists(m.fs, m.memoryPath(chatID))
 		if existErr == nil && !ok {
+			if saveErr := m.saveChecksum(ctx, msgID, []byte{}); saveErr != nil {
+				return "", fmt.Errorf("failed to save checksum: %w", saveErr)
+			}
 			return "", nil
 		}
 		return "", fmt.Errorf("failed to read memory: %w", err)
@@ -91,10 +102,11 @@ func (m *MemoryStorage) Read(ctx context.Context, chatID int64, msgID int64) (st
 	return string(data), nil
 }
 
-// Write atomically replaces the memory file via tempfile+rename.
+// Write atomically replaces the memory file via tempfile+rename. Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Write(ctx context.Context, readToken string, chatID int64, msgID int64, content string) (string, error) {
 	if ok, err := m.isChecksumValid(ctx, msgID, []byte(readToken)); err != nil {
-		if errors.Is(err, &neverReadError{}) {
+		var nre *neverReadError
+		if errors.As(err, &nre) {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
@@ -119,10 +131,11 @@ func (m *MemoryStorage) Write(ctx context.Context, readToken string, chatID int6
 	return "", nil
 }
 
-// Append adds text on a new line to the memory file.
+// Append adds text on a new line to the memory file. Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Append(ctx context.Context, readToken string, chatID int64, msgID int64, text string) (string, error) {
 	if ok, err := m.isChecksumValid(ctx, msgID, []byte(readToken)); err != nil {
-		if errors.Is(err, &neverReadError{}) {
+		var nre *neverReadError
+		if errors.As(err, &nre) {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
@@ -142,17 +155,18 @@ func (m *MemoryStorage) Append(ctx context.Context, readToken string, chatID int
 		}
 	}
 	sb.WriteString(text)
-	if out, err := m.Write(ctx, readToken, chatID, msgID, sb.String()); err != nil {
+	out, err := m.Write(ctx, readToken, chatID, msgID, sb.String())
+	if err != nil {
 		return "", fmt.Errorf("error: %w", err)
-	} else {
-		return out, nil
 	}
+	return out, nil
 }
 
-// Clear deletes the memory file for a chat (no-op if absent).
+// Clear deletes the memory file for a chat (no-op if absent). Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Clear(ctx context.Context, readToken string, chatID int64, msgID int64) (string, error) {
 	if ok, err := m.isChecksumValid(ctx, msgID, []byte(readToken)); err != nil {
-		if errors.Is(err, &neverReadError{}) {
+		var nre *neverReadError
+		if errors.As(err, &nre) {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)

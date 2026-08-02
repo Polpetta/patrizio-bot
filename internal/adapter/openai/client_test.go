@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/polpetta/patrizio/internal/domain"
+		"github.com/polpetta/patrizio/internal/tools/memory"
 )
 
 // fakeCompletionResponse builds a minimal OpenAI chat completion JSON response.
@@ -388,7 +389,7 @@ func TestClient_ChatCompletion_ToolLoop_MemoryWritten(t *testing.T) {
 	client := New("test-key", server.URL, "test-model", 5)
 
 	messages := []domain.ChatMessage{{Role: "user", Content: "I love espresso."}}
-	tools := domain.BuildMemoryTools()
+	tools := memory.BuildMemoryTools()
 
 	result, err := client.ChatCompletion(context.Background(), messages, tools, handler)
 	if err != nil {
