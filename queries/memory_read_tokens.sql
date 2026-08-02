@@ -16,4 +16,5 @@ LIMIT 1;
 
 -- name: SaveToken :exec
 INSERT INTO memory_read_tokens (msg_id, observed_sha)
-VALUES (?, ?);
+VALUES (?1, ?2)
+ON CONFLICT (msg_id) DO UPDATE SET observed_sha = ?2;
