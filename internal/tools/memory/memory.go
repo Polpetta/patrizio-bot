@@ -66,45 +66,60 @@ func NewMemoryToolHandler(repo domain.MemoryRepository, chatID int64, msgID int6
 func (h *memoryToolHandler) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	switch name {
 	case toolReadMemory:
-		content, err := h.repo.Read(ctx, h.chatID, h.msgID)
-		if err != nil {
-			return "", fmt.Errorf("read_memory failed: %w", err)
-		}
-		h.readToken = content
-		if content == "" {
-			return "(memory is empty)", nil
-		}
-		return content, nil
+		return h.handleRead(ctx)
 
 	case toolAppendMemory:
-		var p struct {
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal(args, &p); err != nil {
-			return "", fmt.Errorf("append_memory: invalid args: %w", err)
-		}
-		result, err := h.repo.Append(ctx, h.readToken, h.chatID, h.msgID, p.Text)
-		if err != nil {
-			return "", fmt.Errorf("append_memory failed: %w", err)
-		}
-		h.Wrote = true
-		return result, nil
+		return h.handleAppend(ctx, args)
 
 	case toolUpdateMemory:
-		var p struct {
-			Content string `json:"content"`
-		}
-		if err := json.Unmarshal(args, &p); err != nil {
-			return "", fmt.Errorf("update_memory: invalid args: %w", err)
-		}
-		result, err := h.repo.Write(ctx, h.readToken, h.chatID, h.msgID, p.Content)
-		if err != nil {
-			return "", fmt.Errorf("update_memory failed: %w", err)
-		}
-		h.Wrote = true
-		return result, nil
+		return h.handleUpdate(ctx, args)
 
 	default:
 		return "", fmt.Errorf("unknown memory tool: %s", name)
 	}
+}
+
+// handleRead reads the memory content for the given chat and msgID, and captures it as the readToken.
+func (h *memoryToolHandler) handleRead(ctx context.Context) (string, error) {
+	content, err := h.repo.Read(ctx, h.chatID, h.msgID)
+	if err != nil {
+		return "", fmt.Errorf("read_memory failed: %w", err)
+	}
+	h.readToken = content
+	if content == "" {
+		return "(memory is empty)", nil
+	}
+	return content, nil
+}
+
+// handleAppend appends the given text to the memory for the given chat and msgID.
+func (h *memoryToolHandler) handleAppend(ctx context.Context, args json.RawMessage) (string, error) {
+	var p struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return "", fmt.Errorf("append_memory: invalid args: %w", err)
+	}
+	result, err := h.repo.Append(ctx, h.readToken, h.chatID, h.msgID, p.Text)
+	if err != nil {
+		return "", fmt.Errorf("append_memory failed: %w", err)
+	}
+	h.Wrote = true
+	return result, nil
+}
+
+// handleUpdate updates the memory content for the given chat and msgID.
+func (h *memoryToolHandler) handleUpdate(ctx context.Context, args json.RawMessage) (string, error) {
+	var p struct {
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return "", fmt.Errorf("update_memory: invalid args: %w", err)
+	}
+	result, err := h.repo.Write(ctx, h.readToken, h.chatID, h.msgID, p.Content)
+	if err != nil {
+		return "", fmt.Errorf("update_memory failed: %w", err)
+	}
+	h.Wrote = true
+	return result, nil
 }

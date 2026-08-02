@@ -63,8 +63,9 @@ func (m *MemoryStorage) saveChecksum(ctx context.Context, msgID int64, content [
 	return m.readTokens.SaveToken(ctx, msgID, checksum)
 }
 
-// isChecksumValid checks whether the provided content matches the saved SHA256 checksum for the given message ID.
-func (m *MemoryStorage) isChecksumValid(ctx context.Context, msgID int64, provided []byte) (bool, error) {
+// isChecksumValid checks whether the provided content matches the saved SHA256 checksum for the given message ID. An additional
+// check is performed against the current memory file to ensure it hasn't changed externally.
+func (m *MemoryStorage) isChecksumValid(ctx context.Context, chatID int64, msgID int64, provided []byte) (bool, error) {
 	token, err := m.readTokens.GetToken(ctx, msgID)
 	if err != nil {
 		return false, fmt.Errorf("failed to read token: %w", err)
@@ -72,7 +73,27 @@ func (m *MemoryStorage) isChecksumValid(ctx context.Context, msgID int64, provid
 	if token == "" {
 		return false, &neverReadError{msgID: msgID}
 	}
+
+	// We need to check against the current memory file which could have been changed externally (by another write call)
+	if currentChecksum, err := m.calculateCurrentMemoryChecksum(chatID); err != nil {
+		return false, fmt.Errorf("failed to calculate current checksum: %w", err)
+	} else if token != currentChecksum {
+		return false, nil
+	}
+
 	return token == m.calculateChecksum(provided), nil
+}
+
+// calculateCurrentMemoryChecksum returns the SHA256 checksum of the current memory file for the given chat ID, or "" if no file exists.
+func (m *MemoryStorage) calculateCurrentMemoryChecksum(chatID int64) (string, error) {
+	data, err := afero.ReadFile(m.fs, m.memoryPath(chatID))
+	if err != nil {
+		if errors.Is(err, afero.ErrFileNotFound) {
+			return m.calculateChecksum([]byte{}), nil
+		}
+		return "", err
+	}
+	return m.calculateChecksum(data), nil
 }
 
 // Read returns the memory content for a chat, or "" if no file exists yet. It saves a SHA256 checksum keyed by msgID for later validation in Write/Append/Clear calls.
@@ -105,9 +126,10 @@ func (m *MemoryStorage) Read(ctx context.Context, chatID int64, msgID int64) (st
 
 // Write atomically replaces the memory file via tempfile+rename. Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Write(ctx context.Context, readToken string, chatID int64, msgID int64, content string) (string, error) {
-	if ok, err := m.isChecksumValid(ctx, msgID, []byte(readToken)); err != nil {
-		var nre *neverReadError
-		if errors.As(err, &nre) {
+	if ok, err := m.isChecksumValid(ctx, chatID, msgID, []byte(readToken)); err != nil {
+		if err, ok := errors.AsType[*neverReadError](err); err != nil {
+			return "", fmt.Errorf("error: %w", err)
+		} else if ok {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
@@ -134,9 +156,10 @@ func (m *MemoryStorage) Write(ctx context.Context, readToken string, chatID int6
 
 // Append adds text on a new line to the memory file. Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Append(ctx context.Context, readToken string, chatID int64, msgID int64, text string) (string, error) {
-	if ok, err := m.isChecksumValid(ctx, msgID, []byte(readToken)); err != nil {
-		var nre *neverReadError
-		if errors.As(err, &nre) {
+	if ok, err := m.isChecksumValid(ctx, chatID, msgID, []byte(readToken)); err != nil {
+		if err, ok := errors.AsType[*neverReadError](err); err != nil {
+			return "", fmt.Errorf("error: %w", err)
+		} else if ok {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
@@ -165,9 +188,10 @@ func (m *MemoryStorage) Append(ctx context.Context, readToken string, chatID int
 
 // Clear deletes the memory file for a chat (no-op if absent). Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Clear(ctx context.Context, readToken string, chatID int64, msgID int64) (string, error) {
-	if ok, err := m.isChecksumValid(ctx, msgID, []byte(readToken)); err != nil {
-		var nre *neverReadError
-		if errors.As(err, &nre) {
+	if ok, err := m.isChecksumValid(ctx, chatID, msgID, []byte(readToken)); err != nil {
+		if err, ok := errors.AsType[*neverReadError](err); err != nil {
+			return "", fmt.Errorf("error: %w", err)
+		} else if ok {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)

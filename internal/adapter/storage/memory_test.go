@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/afero"
 	"github.com/polpetta/patrizio/internal/domain"
+	"github.com/spf13/afero"
 )
 
 // fakeSettings is an in-memory ChatSettingsRepository for tests.
@@ -187,7 +187,9 @@ func TestMemoryStorage_ClearNonExistent(t *testing.T) {
 	readToken := bootstrapMemory(ctx, t, fs, ms)
 	// First clear removes the bootstrapped file
 	ms.Clear(ctx, readToken, 1, 1)
-	// Second clear on non-existent file using the same readToken
+	// Second clear on non-existent file using the same readToken: a missing
+	// file is treated as empty by the checksum contract, so this still matches
+	// the bootstrapped empty-file token and must succeed.
 	result, err := ms.Clear(ctx, readToken, 1, 1)
 	if err != nil {
 		t.Errorf("Clear of non-existent should not fail, got: %v", err)
@@ -439,3 +441,33 @@ func TestMemoryStorage_EmptyMemoryReadThenWrite(t *testing.T) {
 
 // Verify MemoryStorage implements the domain.MemoryRepository interface.
 var _ domain.MemoryRepository = (*MemoryStorage)(nil)
+
+// TestMemoryStorage_ReadThenWriteOnMissingFile guards against the first-turn
+// /prompt regression: when no memory file exists yet, Read stores the checksum
+// of empty bytes, so a subsequent Write must not be rejected as stale by the
+// concurrency check.
+func TestMemoryStorage_ReadThenWriteOnMissingFile(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	ms := newTestMemoryStorage(fs)
+	ctx := context.Background()
+
+	// No bootstrap: memory file does not exist on disk.
+	readToken, err := ms.Read(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if readToken != "" {
+		t.Fatalf("expected empty readToken for missing memory, got %q", readToken)
+	}
+	result, err := ms.Write(ctx, readToken, 1, 1, "hello world")
+	if err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if result != "" {
+		t.Errorf("Write result = %q, want empty", result)
+	}
+	got, _ := ms.Read(ctx, 1, 1)
+	if got != "hello world" {
+		t.Errorf("Read = %q, want %q", got, "hello world")
+	}
+}
