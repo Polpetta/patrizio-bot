@@ -127,9 +127,8 @@ func (m *MemoryStorage) Read(ctx context.Context, chatID int64, msgID int64) (st
 // Write atomically replaces the memory file via tempfile+rename. Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Write(ctx context.Context, readToken string, chatID int64, msgID int64, content string) (string, error) {
 	if ok, err := m.isChecksumValid(ctx, chatID, msgID, []byte(readToken)); err != nil {
-		if err, ok := errors.AsType[*neverReadError](err); err != nil {
-			return "", fmt.Errorf("error: %w", err)
-		} else if ok {
+		var nre *neverReadError
+		if errors.As(err, &nre) {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
@@ -157,9 +156,8 @@ func (m *MemoryStorage) Write(ctx context.Context, readToken string, chatID int6
 // Append adds text on a new line to the memory file. Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Append(ctx context.Context, readToken string, chatID int64, msgID int64, text string) (string, error) {
 	if ok, err := m.isChecksumValid(ctx, chatID, msgID, []byte(readToken)); err != nil {
-		if err, ok := errors.AsType[*neverReadError](err); err != nil {
-			return "", fmt.Errorf("error: %w", err)
-		} else if ok {
+		var nre *neverReadError
+		if errors.As(err, &nre) {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
@@ -189,9 +187,8 @@ func (m *MemoryStorage) Append(ctx context.Context, readToken string, chatID int
 // Clear deletes the memory file for a chat (no-op if absent). Requires readToken from a prior Read call. Returns an error message in the string return if memory was never read or has changed.
 func (m *MemoryStorage) Clear(ctx context.Context, readToken string, chatID int64, msgID int64) (string, error) {
 	if ok, err := m.isChecksumValid(ctx, chatID, msgID, []byte(readToken)); err != nil {
-		if err, ok := errors.AsType[*neverReadError](err); err != nil {
-			return "", fmt.Errorf("error: %w", err)
-		} else if ok {
+		var nre *neverReadError
+		if errors.As(err, &nre) {
 			return "error: call read_memory before modifying memory", nil
 		}
 		return "", fmt.Errorf("error: %w", err)
