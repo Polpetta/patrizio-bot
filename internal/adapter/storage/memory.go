@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -9,8 +11,6 @@ import (
 
 	"github.com/polpetta/patrizio/internal/domain"
 	"github.com/spf13/afero"
-
-	"crypto/sha256"
 )
 
 const memoryFileName = "memory.md"
@@ -49,11 +49,12 @@ func (m *MemoryStorage) chatDir(chatID int64) string {
 	return filepath.Join(m.root, fmt.Sprintf("%d", chatID))
 }
 
-// calculateChecksum calculates SHA256 checksum of the given content
+// calculateChecksum returns a hex-encoded SHA-256 of the given content.
+// Hex encoding avoids NUL bytes and non-UTF-8 data being stored in a SQLite
+// TEXT column, which otherwise truncates/round-trips incorrectly.
 func (m *MemoryStorage) calculateChecksum(content []byte) string {
-	sha := sha256.New()
-	sha.Write(content)
-	return string(sha.Sum(nil))
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:])
 }
 
 // saveChecksum calculates a SHA256 checksum of the content and persists it via the readTokens repository for later validation.

@@ -1,8 +1,14 @@
 -- name: GetReadToken :one
+-- Walk up the conversation ancestry from the current msg_id, returning the
+-- nearest saved read-token. The seed row uses the parameter directly (rather
+-- than joining conversation_messages) so this also works during the first
+-- turn of a /prompt, when the current msg_id has not yet been persisted into
+-- conversation_messages (that insert happens after ChatCompletion returns).
 WITH RECURSIVE branch(msg_id, parent_msg_id, depth) AS (
-    SELECT c.msg_id, c.parent_msg_id, 0
-    FROM conversation_messages c
-    WHERE c.msg_id = ?          -- current turn's msg_id
+    SELECT
+        CAST(?1 AS INTEGER) AS msg_id,
+        (SELECT c.parent_msg_id FROM conversation_messages c WHERE c.msg_id = ?1) AS parent_msg_id,
+        0 AS depth
     UNION ALL
     SELECT cm.msg_id, cm.parent_msg_id, b.depth + 1
     FROM conversation_messages cm
