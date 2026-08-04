@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/polpetta/patrizio/internal/domain"
-		"github.com/polpetta/patrizio/internal/tools/memory"
+	"github.com/polpetta/patrizio/internal/tools/memory"
 )
 
 // fakeCompletionResponse builds a minimal OpenAI chat completion JSON response.

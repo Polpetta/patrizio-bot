@@ -117,8 +117,8 @@ type ConversationRepository interface {
 }
 
 // ReadTokensRepository defines operations for persisting and retrieving SHA256 checksums
-	// for memory read tokens to enforce read-before-write ordering.
-	type ReadTokensRepository interface {
+// for memory read tokens to enforce read-before-write ordering.
+type ReadTokensRepository interface {
 	GetToken(ctx context.Context, msgID int64) (string, error)
 	SaveToken(ctx context.Context, msgID int64, token string) error
 }
