@@ -84,7 +84,7 @@ func (m *MemoryStorage) isChecksumValid(ctx context.Context, chatID int64, msgID
 	return token == m.calculateChecksum(provided), nil
 }
 
-// calculateCurrentMemoryChecksum returns the SHA256 checksum of the current memory file for the given chat ID, or "" if no file exists.
+// calculateCurrentMemoryChecksum returns the SHA256 checksum of the current memory file for the given chat ID. Missing files are treated as empty content.
 func (m *MemoryStorage) calculateCurrentMemoryChecksum(chatID int64) (string, error) {
 	data, err := afero.ReadFile(m.fs, m.memoryPath(chatID))
 	if err != nil {
