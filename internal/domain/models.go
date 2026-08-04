@@ -69,8 +69,8 @@ type IncomingMessage struct {
 	ChatID        uint32
 	FromID        uint32
 	Text          string
-	File          string        // local path to attached file, empty if none
-	MediaType     string        // domain media type constant (image/sticker/gif/video), empty if not media
+	File          string // local path to attached file, empty if none
+	MediaType     string // domain media type constant (image/sticker/gif/video), empty if not media
 	DownloadState DownloadState
 	Quote         *QuotedMessage // nil if message is not a reply
 }

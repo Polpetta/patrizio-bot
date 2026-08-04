@@ -3,16 +3,13 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"errors"
 	"testing"
 
 	"github.com/polpetta/patrizio/internal/database"
 	"github.com/polpetta/patrizio/internal/domain"
+	"github.com/polpetta/patrizio/migrations"
 )
-
-//go:embed testdata/migrations
-var testMigrationsFS embed.FS
 
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -22,8 +19,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 
-	// Run migrations
-	if err := database.Migrate(db, testMigrationsFS, "testdata/migrations"); err != nil {
+	if err := database.Migrate(db, migrations.FS, "."); err != nil {
 		_ = db.Close()
 		t.Fatalf("Failed to run migrations: %v", err)
 	}

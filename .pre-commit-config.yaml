@@ -13,6 +13,16 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: Go format
+        entry: gofmt -w
+        language: system
+        types: [go]
+        pass_filenames: true
+        stages: [pre-commit]
+
   # Golangci-lint for Go code (using local installation)
   - repo: local
     hooks:
@@ -86,7 +96,7 @@ repos:
 
 ci:
   # These are already covered by `commit.yml` and `docker.yml` Github Actions
-  skip: [go-mod-tidy, golangci-lint, go-build, docker-build, run-tests, hadolint]
+  skip: [gofmt, go-mod-tidy, golangci-lint, go-build, docker-build, run-tests, hadolint]
   autofix_commit_msg: |
     fix(lint): apply pre-commit lints
 

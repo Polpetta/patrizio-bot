@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/polpetta/patrizio/internal/domain"
+	"github.com/polpetta/patrizio/internal/tools/memory"
 )
 
 type handlerLogger interface {
@@ -758,8 +759,8 @@ func handlePromptCommand(
 
 	var response domain.ChatResponse
 	if memoryEnabled && deps.ChatExecutor != nil {
-		tools := domain.BuildMemoryTools()
-		handler := domain.NewMemoryToolHandler(deps.MemoryRepository, chatID)
+		tools := memory.BuildMemoryTools()
+		handler := memory.NewMemoryToolHandler(deps.MemoryRepository, chatID, int64(msgID))
 		runErr := deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
 			var inner error
 			response, inner = deps.AIClient.ChatCompletion(innerCtx, messages, tools, handler)
@@ -885,8 +886,8 @@ func handleThreadContinuation(
 
 	var response domain.ChatResponse
 	if memoryEnabled && deps.ChatExecutor != nil {
-		tools := domain.BuildMemoryTools()
-		handler := domain.NewMemoryToolHandler(deps.MemoryRepository, chatID)
+		tools := memory.BuildMemoryTools()
+		handler := memory.NewMemoryToolHandler(deps.MemoryRepository, chatID, int64(msgID))
 		runErr := deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
 			var inner error
 			response, inner = deps.AIClient.ChatCompletion(innerCtx, messages, tools, handler)
@@ -956,7 +957,7 @@ func handleMemoryCommand(logger handlerLogger, accID uint32, msgID uint32, msg *
 
 	switch sub {
 	case domain.MemoryShow:
-		content, readErr := deps.MemoryRepository.Read(ctx, chatID)
+		content, readErr := deps.MemoryRepository.Read(ctx, chatID, int64(msgID))
 		if readErr != nil {
 			logger.Errorf("Failed to read memory for chat %d: %v", chatID, readErr)
 			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to read memory.")
@@ -970,18 +971,29 @@ func handleMemoryCommand(logger handlerLogger, accID uint32, msgID uint32, msg *
 		}
 
 	case domain.MemoryClear:
-		// Serialize through ChatExecutor so a clear cannot interleave with an in-flight update_memory call.
+		// Read memory first to obtain a read token, as required by the
+		// read-before-write enforcement.
+		content, readErr := deps.MemoryRepository.Read(ctx, chatID, int64(msgID))
+		if readErr != nil {
+			logger.Errorf("Failed to read memory before clear for chat %d: %v", chatID, readErr)
+			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to clear memory.")
+			return
+		}
+
+		var clearMsg string
 		var clearErr error
 		if deps.ChatExecutor != nil {
 			clearErr = deps.ChatExecutor.Run(ctx, chatID, func(innerCtx context.Context) error {
-				return deps.MemoryRepository.Clear(innerCtx, chatID)
+				var innerErr error
+				clearMsg, innerErr = deps.MemoryRepository.Clear(innerCtx, content, chatID, int64(msgID))
+				return innerErr
 			})
 		} else {
-			clearErr = deps.MemoryRepository.Clear(ctx, chatID)
+			clearMsg, clearErr = deps.MemoryRepository.Clear(ctx, content, chatID, int64(msgID))
 		}
 		if clearErr != nil {
 			logger.Errorf("Failed to clear memory for chat %d: %v", chatID, clearErr)
-			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, "Failed to clear memory.")
+			sendErrorMessage(deps, logger, accID, msg.ChatID, msgID, clearMsg)
 			return
 		}
 		if _, sendErr := deps.Messenger.SendTextReply(accID, msg.ChatID, msgID, "Memory cleared."); sendErr != nil {

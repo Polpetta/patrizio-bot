@@ -56,7 +56,8 @@ func InitDatabase(cfg domain.Config, migrationsFS fs.FS, migrationsDir string) (
 // Returns the registry separately so the caller can shut it down on process exit.
 func BuildDependencies(cfg *config.Config, db *sql.DB) (*domain.Dependencies, *ChatWorkerRegistry) {
 	chatSettings := sqlite.NewChatSettings(db)
-	memRepo := storage.NewMemoryStorage(afero.NewOsFs(), cfg.ChatStatePath(), cfg.OpenAIMaxMemoryBytes(), chatSettings)
+	readTokensRepo := sqlite.NewReadTokens(db)
+	memRepo := storage.NewMemoryStorage(afero.NewOsFs(), cfg.ChatStatePath(), cfg.OpenAIMaxMemoryBytes(), chatSettings, readTokensRepo)
 	chatExec := NewChatWorkerRegistry(4)
 
 	deps := &domain.Dependencies{

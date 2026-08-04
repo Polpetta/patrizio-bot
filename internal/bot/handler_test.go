@@ -47,10 +47,10 @@ type sentTextMessageEntry struct {
 }
 
 type sentTextReplyEntry struct {
-	accID  uint32
-	chatID uint32
+	accID   uint32
+	chatID  uint32
 	replyTo uint32
-	text   string
+	text    string
 }
 
 type sentMediaReplyEntry struct {
@@ -1018,7 +1018,6 @@ func TestHandleGroupMessage_CommandRouting(t *testing.T) {
 		t.Fatal("expected /filter command to route to handleFilterCommand and create a text filter")
 	}
 }
-
 
 // --- Prompt Command Tests ---
 
@@ -2012,7 +2011,7 @@ func TestHandleThreadContinuation_GroupChat_WithDisplayName(t *testing.T) {
 		ChatID: 100,
 		FromID: 99,
 		Text:   "Tell me more",
-		Quote: &domain.QuotedMessage{MessageID: 6},
+		Quote:  &domain.QuotedMessage{MessageID: 6},
 	}
 
 	deps := &domain.Dependencies{

@@ -25,14 +25,15 @@ type MediaStorage interface {
 	Exists(hash string) (bool, error)
 }
 
-// MemoryRepository defines per-chat AI memory operations.
-// Read returns "" when no file exists. Write/Append return ErrMemoryTooLarge on overflow.
-// IsEnabled defaults to true when no setting is stored.
+// MemoryRepository defines per-chat AI memory operations with a read-before-write contract.
+// Read saves a checksum keyed by msgID and returns the memory content (or "" when no file exists).
+// Write, Append, and Clear require a readToken obtained from a prior Read call that covers the same msgID.
+// Return values are (resultMessage, error) — user-facing messages for tool results.
 type MemoryRepository interface {
-	Read(ctx context.Context, chatID int64) (string, error)
-	Write(ctx context.Context, chatID int64, content string) error
-	Append(ctx context.Context, chatID int64, text string) error
-	Clear(ctx context.Context, chatID int64) error
+	Read(ctx context.Context, chatID int64, msgID int64) (string, error)
+	Write(ctx context.Context, readToken string, chatID int64, msgID int64, content string) (string, error)
+	Append(ctx context.Context, readToken string, chatID int64, msgID int64, text string) (string, error)
+	Clear(ctx context.Context, readToken string, chatID int64, msgID int64) (string, error)
 	IsEnabled(ctx context.Context, chatID int64) (bool, error)
 	SetEnabled(ctx context.Context, chatID int64, enabled bool) error
 }
@@ -113,4 +114,11 @@ type ConversationRepository interface {
 	SaveMessage(ctx context.Context, threadRootID int64, msgID int64, parentMsgID *int64, role string, content string, senderName string) error
 	GetThreadChain(ctx context.Context, leafMsgID int64, limit int) ([]ChatMessage, error)
 	IsConversationMessage(ctx context.Context, msgID int64) (bool, *int64, error)
+}
+
+// ReadTokensRepository defines operations for persisting and retrieving SHA256 checksums
+// for memory read tokens to enforce read-before-write ordering.
+type ReadTokensRepository interface {
+	GetToken(ctx context.Context, msgID int64) (string, error)
+	SaveToken(ctx context.Context, msgID int64, token string) error
 }

@@ -27,6 +27,11 @@ jobs:
         with:
           version: v2.12.2
 
+      - name: Ensures Go code is formatted
+        uses: nickcharlton/diff-check@9fa7ac2bd275b9ec60f13dbcef1b90cfaadc1872 # v1
+        with:
+          command: gofmt -w .
+
       - name: Ensures Go mod tidy is up to date
         uses: nickcharlton/diff-check@9fa7ac2bd275b9ec60f13dbcef1b90cfaadc1872 # v1
         with:

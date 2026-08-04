@@ -127,7 +127,7 @@ func Load() (*Config, error) {
 	viper.SetDefault(KeyOpenAIModel, "gpt-4o-mini")
 	viper.SetDefault(KeyOpenAIMaxHistory, 50)
 	viper.SetDefault(KeyOpenAISystemPrompt, "You are a helpful assistant.")
-	viper.SetDefault(KeyOpenAIMaxToolIterations, 5)
+	viper.SetDefault(KeyOpenAIMaxToolIterations, 15)
 	viper.SetDefault(KeyOpenAIMaxMemoryBytes, 8192)
 
 	// Try to load TOML config file (optional)
