@@ -46,7 +46,7 @@ jobs:
 
   doc-checks:
     name: Docs linting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Clone repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -57,7 +57,7 @@ jobs:
           reporter: github-pr-review
           fail_on_error: true
           fail_level: warning
-          glob: '*.{md,markdown}'
+          glob: 'docs/**/*.md'
 
   doc-build:
     runs-on: ubuntu-slim

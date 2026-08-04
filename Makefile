@@ -56,11 +56,7 @@ migrate-create:
 sqlc:
 	sqlc generate
 
-# Phony alias so `make doc-setup` still triggers a check.
-# The real work is guarded by a stamp file whose mtime tracks the last
-# successful `uv sync`, so the recipe only re-runs when one of the
-# prerequisite files actually changes.
-doc-setup: .venv/.doc-setup.stamp doc-lint-setup
+doc-setup: .venv/.doc-setup.stamp
 
 doc-lint-setup: .git/.doc-lint.stamp
 
