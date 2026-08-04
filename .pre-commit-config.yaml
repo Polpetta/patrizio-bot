@@ -93,6 +93,7 @@ repos:
         language: system
         types: ["dockerfile"]
         entry: hadolint
+        stages: [pre-commit]
 
   - repo: https://github.com/vale-cli/vale
     rev: 16d3a7f
