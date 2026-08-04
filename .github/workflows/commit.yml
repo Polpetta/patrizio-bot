@@ -5,6 +5,7 @@ on:
     branches:
       - 'renovate/**'
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,3 +43,36 @@ jobs:
 
       - name: Run tests
         run: make test
+
+  doc-checks:
+    name: Docs linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Website linting
+        uses: vale-cli/vale-action@v3
+        with:
+          reporter: github-pr-review
+          fail_on_error: true
+          fail_level: warning
+          glob: '*.{md,markdown}'
+
+  doc-build:
+    runs-on: ubuntu-slim
+    name: Build public docs
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      - name: Run make doc-build
+        run: make doc-build

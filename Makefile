@@ -1,4 +1,4 @@
-.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean doc-activate-venv doc-setup doc-build doc-local
+.PHONY: project-setup build run test lint docker-build migrate migrate-create sqlc clean doc-activate-venv doc-setup doc-build doc-local doc-lint
 
 SHELL := /bin/bash
 
@@ -30,6 +30,7 @@ test:
 # Go's ./... only skips dirs prefixed with . or _ (and testdata), so data/ would
 # otherwise be traversed and fail with permission-denied on data/chat_state.
 lint:
+	gofmt -w .
 	golangci-lint run ./cmd/... ./internal/...
 
 # Build Docker image
@@ -59,7 +60,13 @@ sqlc:
 # The real work is guarded by a stamp file whose mtime tracks the last
 # successful `uv sync`, so the recipe only re-runs when one of the
 # prerequisite files actually changes.
-doc-setup: .venv/.doc-setup.stamp
+doc-setup: .venv/.doc-setup.stamp doc-lint-setup
+
+doc-lint-setup: .git/.doc-lint.stamp
+
+.git/.doc-lint.stamp: vale.ini
+	vale sync
+	@touch $@
 
 .venv/.doc-setup.stamp: .python-version pyproject.toml uv.lock
 	uv sync --locked --all-extras --dev
@@ -70,6 +77,9 @@ doc-build: doc-setup
 
 doc-local: doc-setup
 	uv run zensical serve
+
+doc-lint: doc-lint-setup
+	vale README.md $$(find docs -type f -name '*.md' -not -path 'docs/superpowers/*')
 
 # Remove build artifacts
 clean:

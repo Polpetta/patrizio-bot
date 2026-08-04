@@ -134,6 +134,7 @@ make project-setup
 | `make doc-setup`                  | Command to only setup documentation (included in `project setup`) |
 | `make doc-build`                  | Builds the documentation and output in `site` directory           |
 | `make doc-local`                  | Serves the documentation locally, at `localhost:8000`             |
+| `make doc-lint`                   | Run Vale linter for documentation                                 |
 | `make clean`                      | Remove build artifacts                                            |
 
 ### Database Migrations
