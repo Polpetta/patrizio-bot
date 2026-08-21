@@ -36,7 +36,7 @@ COPY --from=builder /app/patrizio /usr/local/bin/patrizio
 COPY --from=builder --chown=nonroot:nonroot /app/data /data
 COPY --from=rpc-server /deltachat-rpc-server /usr/local/bin/deltachat-rpc-server
 
-USER nonroot:nonroot
+USER 65532:65532 # nonroot user:group
 VOLUME ["/data"]
 
 ENTRYPOINT ["/usr/local/bin/patrizio"]
