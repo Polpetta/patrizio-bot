@@ -3,7 +3,7 @@
 # so go.mod stays the single source of truth for the Go toolchain version.
 # To suppress warnings a default version can by generated with
 # `make -B Dockerfile`
-ARG GO_VERSION=1.26.5
+ARG GO_VERSION=1.26.6@sha256:0d1d3a794be25f809dd2cb3160d8c73276c4056a9f8242a138e908ddeee7b6b6
 FROM golang:${GO_VERSION} AS builder
 
 WORKDIR /app
