@@ -23,7 +23,7 @@ jobs:
     name: Dockerfile linting
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Lint Dockerfile
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
@@ -59,7 +59,7 @@ jobs:
     name: Image (${{ matrix.targetarch }})
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Read Go version from go.mod
         id: goversion
         run: echo "value=$(awk '/^go / {print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
