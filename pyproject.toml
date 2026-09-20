@@ -10,5 +10,5 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "zensical==0.0.61",
+    "zensical==0.0.62",
 ]
