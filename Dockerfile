@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o patrizio ./cmd/patrizi
     mkdir -p data/db data/media
 
 # Download deltachat-rpc-server from GitHub releases
-FROM alpine:3@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS rpc-server
+FROM alpine:3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS rpc-server
 
 ARG TARGETARCH
 # renovate: datasource=go packageName=github.com/chatmail/rpc-client-go/v2 versioning=semver
