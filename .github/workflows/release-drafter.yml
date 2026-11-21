@@ -14,14 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Update release draft
     steps:
-      - uses: release-drafter/release-drafter@4d75298e00d9e34c483e5ff8c68d0ea1c1940c1e # v7
+      - uses: release-drafter/release-drafter@d1a19e60e81a7e650d00a7de9277f87e439117ea # v7
         with:
           config-name: release-drafter.yml
   update_prerelease_draft:
     runs-on: ubuntu-latest
     name: Update pre-release draft
     steps:
-      - uses: release-drafter/release-drafter@4d75298e00d9e34c483e5ff8c68d0ea1c1940c1e # v7
+      - uses: release-drafter/release-drafter@d1a19e60e81a7e650d00a7de9277f87e439117ea # v7
         with:
           prerelease: true
           prerelease-identifier: "rc"
